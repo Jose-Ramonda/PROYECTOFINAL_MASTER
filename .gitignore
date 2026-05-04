@@ -1,0 +1,27 @@
+# --- ESPECÍFICO DEL USUARIO ---
+# Ignorar carpeta pesada de bibliografía
+Bibliografia/
+TeleBot
+# --- LATEX (Basura de compilación) ---
+build/
+*.aux
+*.log
+*.out
+*.toc
+*.pdf
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+
+# --- PYTHON (Bot de Telegram) ---
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.env
+
+# --- SISTEMA Y VS CODE ---
+.vscode/
+.DS_Store
+Thumbs.db

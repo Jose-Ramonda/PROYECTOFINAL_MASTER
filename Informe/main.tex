@@ -1,0 +1,51 @@
+%\documentclass[12pt,a4paper]{article}
+\documentclass[12pt,a4paper,twoside]{article}
+
+% =======================
+% Paquetes básicos
+% =======================
+\usepackage[spanish]{babel}    % Idioma español
+\usepackage[utf8]{inputenc}    % Acentos en UTF-8
+\usepackage[T1]{fontenc}       % Codificación de salida
+\usepackage{lmodern}           % Fuente mejorada (Latin Modern)
+\usepackage{graphicx}          % Insertar imágenes
+\usepackage{amsmath, amssymb}  % Matemáticas
+\usepackage{geometry}          % Márgenes
+\usepackage{hyperref}          % Hipervínculos
+\usepackage{enumitem}          % Listas personalizadas
+\usepackage{caption}           % Mejoras en títulos de figuras/tablas
+\usepackage{setspace}
+\usepackage{float}   % Para usar [H] en tablas y figuras
+\usepackage{csvsimple} %Para tablas
+\usepackage{booktabs} % para tablas más limpias
+\usepackage{graphicx}
+
+% Configuración de márgenes
+%\geometry{top=2.5cm, bottom=2.5cm, left=3cm, right=3cm}
+\geometry{top=2.5cm, bottom=2.5cm, inner=3.5cm, outer=2.5cm}
+% Para que LaTeX busque imágenes siempre en la carpeta img/
+\graphicspath{{img/}}
+
+% =======================
+% Documento
+% =======================
+\begin{document}
+	
+	% Carátula
+	\input{tex/00Caratula.tex}
+	\clearpage
+	\setcounter{page}{0} % <-- ¡Clave! Reinicia numeración desde 0
+	\thispagestyle{empty}%Oculta el indice
+	\tableofcontents 
+	\newpage
+
+	% Secciones
+	\setcounter{page}{1}
+	\input{tex/01seccion1.tex}
+	\input{tex/02seccion2.tex}
+
+	\input{tex/03seccion3.tex}
+
+	
+	
+\end{document}
