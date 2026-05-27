@@ -19,7 +19,7 @@
 \usepackage{csvsimple} %Para tablas
 \usepackage{booktabs} % para tablas más limpias
 \usepackage{graphicx}
-
+\usepackage[style=american]{csquotes}
 % Configuración de márgenes
 %\geometry{top=2.5cm, bottom=2.5cm, left=3cm, right=3cm}
 \geometry{top=2.5cm, bottom=2.5cm, inner=3.5cm, outer=2.5cm}
@@ -34,16 +34,15 @@
 	% Carátula
 	\input{tex/00Caratula.tex}
 	\clearpage
-	\setcounter{page}{0} % <-- ¡Clave! Reinicia numeración desde 0
+	\input{tex/01seccion1.tex}
 	\thispagestyle{empty}%Oculta el indice
 	\tableofcontents 
 	\newpage
 
 	% Secciones
-	\setcounter{page}{1}
-	\input{tex/01seccion1.tex}
-	\input{tex/02seccion2.tex}
 
+	
+	\input{tex/02seccion2.tex}
 	\input{tex/03seccion3.tex}
 
 	
