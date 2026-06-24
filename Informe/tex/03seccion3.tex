@@ -49,4 +49,12 @@ Los registros históricos de accesos se dan en formatos legibles y se cargan dia
 
 \subsection{Requerimientos del sistema}
 
-Los requisitos temporales de
+Los requisitos temporales del sistema no son estrictos al punto de requerir una respuesta en tiempo real, sin embargo el uso de este debe percibirse fluido para los actores.
+
+Se establece entonces que el tiempo de respuesta para los accesos autorizados debe estar en el orden de los dos segundos, contando desde que el tag se presenta ante el sensor hasta que se acciona el relé que destraba la puerta. 
+
+En el caso del acceso de visitantes externos, el tiempo de respuesta se enmascara con la demora de la reacción humana, por lo que se establece una respuesta del orden de los cinco segundos del sistema para enviar la foto al usuario final, y del mismo orden para la apertura desde el comando manual, no pudendose controlar el tiempo de respuesta del usuario. 
+
+Otro requerimiento es la robustez frente a fallas del suministro energético y la conexión a internet. Para eso se propone conectar el servidor a una unidad UPS para mantenerlo activo ante cortes de energía, aunque sin funcionamiento. El sistema se habilita solo en un horario determinado, en caso de un desfazaje del reloj del servidor, por ejemplo por un reinicio sin conexión a internet para ponerse en hora, se puede mediante un tag especial forzar el funcionamiento del sistema fuera de horario, al menos hasta que se retome la conectividad y el sistema vuelva a funcionar con normalidad.
+
+El último requerimiento crítico es el de seguridad del sistema, el cual se abarca en la sección correspondiente (...).
