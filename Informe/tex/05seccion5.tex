@@ -1,5 +1,5 @@
 \section{Terminales}
-Los terminales son los subsistemas expuestos al campo, cada uno representa un punto de acceso. A diferencia del servidor, que es único, el sistema se compone de varios terminales en cada punto de acceso, en este casos tres, pero en una aplicación similar el número de terminales podría extenderse. Es por eso que se diseñaron para ser replicables, adaptables y baratos, ya que el costo del proyecto crece marginalmente con cada terminal que se incorpore.
+Los terminales son los subsistemas expuestos al campo, cada uno representa un punto de acceso. A diferencia del servidor, que es único, el sistema se compone de varios terminales en cada punto de acceso, en este casos tres, pero en una aplicación similar el número de terminales podría extenderse. Por este motivo, los terminales fueron diseñados para ser fácilmente replicables, adaptables y de bajo costo, dado que el costo total del sistema aumenta de marginalmente con cada nueva unidad incorporada.
 
 
 \subsection{Selección de hardware}
@@ -8,27 +8,27 @@ Un terminal se compone de un microcontrolador, diversos módulos electrónicos y
     \item Una cámara
     \item Un sensor NFC
     \item Un tranceiver RS-485
-    \item Una antena WIFI
-    \item Dos relés, uno para permitir el ingreso destrabando la puerta y otro para hacer zonar el timbre
+    \item Una antena WiFi
+    \item Dos relés, uno para permitir el ingreso destrabando la puerta y otro para hacer sonar el timbre
     \item Un interruptor, para que los visitantes externos soliciten el acceso
 \end{itemize}
 
-La primera opción para utilizar como controlador principal del proyecto, fue el kit de desarrollo ESP32-CAM, basado en el módulo WROM-32, el cual integra un microcontrolador ESP32 junto con una antena de radio e interfaces para conectividades WIFI, Bluetooth entre otras, con la particularidad de que incluye un socket para conectar una cámara, por ejemplo la OV2640 que viene incluida. El mayor problema del módulo, es la limitada cantidad de pines GPIO disponibles y utilizables, haciendo poco viable para ser el "cerebro" del terminal, a pesar de ser computacionalmente capaz de cumplir con las funciones requeridas.
+La primera opción para utilizar como controlador principal del proyecto, fue el kit de desarrollo ESP32-CAM, basado en el módulo WROM-32, el cual integra un microcontrolador ESP32 junto con una antena de radio e interfaces para conectividades WiFi, Bluetooth entre otras, con la particularidad de que incluye un socket para conectar una cámara, por ejemplo la OV2640 que viene incluida. El mayor problema del módulo, es la limitada cantidad de pines GPIO disponibles y utilizables, haciendo poco viable para ser el controlador principal del terminal, a pesar de ser computacionalmente capaz de cumplir con las funciones requeridas.
 
 Se optó por una arquitectura distribuida, en la que el ESP32-CAM queda dedicado exclusivamente a la adquisición y transmisión de imágenes, mientras que el procesamiento principal y el control de los periféricos recaen sobre un segundo ESP32.
 
 \subsubsection{Microcontrolador}
 El ESP32 fue seleccionado por ofrecer un adecuado equilibrio entre capacidad de procesamiento, memoria, periféricos integrados y costo, además de incorporar múltiples interfaces de comunicación (UART, SPI, I²C, WiFi y Bluetooth). 
 Otra ventaja es su procesador de doble núcleo que permite multitasking real.
-Para el prototipo se utilizará un kit de desarrollo ESP32 DEV KIT V1, pudiendose reemplazar en producción por el microcontrolador suelto, dado que este elemento del sistema no requiere del uso de la antena WIFI.
+Para el prototipo se utilizará un kit de desarrollo ESP32 DEV KIT V1, pudiéndose reemplazar en producción por el microcontrolador suelto, ya que esta etapa del sistema no requiere conectividad WiFi.
 
 \subsubsection{Cámara}
 Para el prototipo se optó, como ya se mencionó anteriormente en el uso del kit de desarrollo ESP32 CAM, el cual se vende con la cámara OV2640.
-Esta elección se basa en el facil acceso y el bajo precio del módulo, el cual resuelve varios aspectos de la toma y transmición de fotografías. 
-La cámara cuneta con una resolucón de 2MP, suficiente para un reconocimiento de un rostro por parte de un validador humano. El módulo ademas incorpora un led de alta luminosidad que funciona como flash de la cámara, y una memoria PSRAM externa de 4MB que permite almacenar temporalmente las imágenes.
-Se aprovecha tambien la conexión WIFI para transmitir las fotografías mediante HTTP.
+Esta elección se basa en el fácil  acceso y el bajo precio del módulo, el cual resuelve varios aspectos de la toma y transmisión de fotografías. 
+La cámara cuenta con una resolución de 2MP, suficiente para un reconocimiento de un rostro por parte de un validador humano. El módulo además incorpora un led de alta luminosidad que funciona como flash de la cámara, y una memoria PSRAM externa de 4MB que permite almacenar temporalmente las imágenes.
+La conectividad WiFi incorporada se utiliza para transmitir las imágenes al servidor mediante el protocolo HTTP.
 
-Se comunica contra el microcontrolador principal mediante UART.
+Se comunica contra el microcontrolador principal mediante UART para recibir comandor y compartir información.
 
 \subsubsection{Comunicación RS-485}
 Para la comunicación con el servidor, el ESP32 debe comunicarse con un transreceptor que \enquote{traduzca} UART a 485. Se seleccionó un módulo basado en el circuito integrado MAX485, ampliamente utilizado para la conversión entre UART y RS-485.
@@ -41,8 +41,13 @@ Para este desarrollo se optó por las etiquetas NTAG-21X como credenciales de ac
 El módulo cuenta con interfaz SPI para comunicarse con el controlador principal.
 
 \subsubsection{Interfaces de campo}
-Para la activación del timbre y el desbloqueo de la puerta se incorporan sendos relés en cada terminal, comandados por salidas digitales del controlador. Ambos eqipos funcionan con 220V de la red.
+Para la activación del timbre y el desbloqueo de la puerta se incorporan sendos relés en cada terminal, comandados por salidas digitales del controlador. Ambos equipos operan con tensión de red de 220 V CA.
 Para el pulsador del timbre, se conectó entre gnd y la entrada digital del ESP32 una bornera, que permita aprovechar el pulsador ya existente en la instalación.
+
+\subsubsection{Alimentación}
+Las ESP32 operan a 3,3V, pero pueden alimentarse con 5V ya que las placas cuentan con reguladores de vlotaje LDO incorporadas. El PN532 tambien cuenta con un regulador y tanto el transreceptor como los relés se deben alimentar con 5V. Se propone entonces alimentar mediante un conector micro USB tipo A (u opcionalmente un tipo C), para poder alimentar el circuito desde una fuente externa, como por ejemplo un cargador de teléfono celular.
+
+Se añade tambien un capacitor de 470\mu F para mitigar el efecto de los picos de consumo de corriente que puede llegar a consumirse durante el encendido de la cámara o la antena WiFi.
 
 \subsection{Firmware del controlador}
 Para programar el firmware del controlador, se utilizó el framework oficial de Espressif, ESP IDF,a través de la extensión del entorno Visual Studio Code.
@@ -60,8 +65,8 @@ Otra  funcionalidad de los RTOS es, como su nombre lo indica, la posibilidad de 
 Las tareas pueden encontrarse en cuatro distintos estados:
 
 \begin{itemize}
-    \item \textbf{Runnig} o corriendo, la tarea se está ejecutando.
-    \item \textbf{Ready} o lista, la tarea está lista para ejecutarse, pero la cpu está tomada por otra tarea de mayor o igual priordad.
+    \item \textbf{Running} o corriendo, la tarea se está ejecutando.
+    \item \textbf{Ready} o lista, la tarea está lista para ejecutarse, pero la cpu está tomada por otra tarea de mayor o igual prioridad.
     \item \textbf{Suspended} o suspendida, la tarea se encuentra \enquote{dormida}, es decir temporalmente desactivada, solo puede ser reactivada por otra tarea.
     \item \textbf{Blocked} o bloqueada, la tarea está esperando a un evento para estar lista.
 \end{itemize}
@@ -69,11 +74,11 @@ Solo las tareas en estado Running consumen ciclos de CPU, por lo que se dice que
 
 Para definir cual tarea de todas las que estan listas se ejecuta hay dos formas de trabajar, la operación colaboratíva, donde cada tarea cede el procesador en determinado momento, y la operación apropiativa, donde el scheduler interrumpe una tarea para darle CPU a otra. FreeRTOS para ESP-IDF utiliza planificación apropiativa basada en prioridades.
 
-La expropiación puede ser para ejecutar una tarea de mayor prioridad o bien para alternar entre varias tareas de igual prioridad.
+La apropiación puede ser para ejecutar una tarea de mayor prioridad o bien para alternar entre varias tareas de igual prioridad.
 
 La suspención se da cuando una tarea debe dejar de ejecutarse temporalmente, una tarea puede suspenderse a sí misma y a otras pero solo puede ser retomada desde otra tarea.
 
-El bloqueo se da cuando una tarea debe esperar un evento para continuar su ejecucíon, tal como la finalización de un timer, el cambio de una bandera o bien el aviso de otra tarea. La espera de una interrupción no puede bloquear directamente a una tarea, pero puede enviarse el aviso de desbloqueo desde el callback de dicha interrupción.
+El bloqueo se da cuando una tarea debe esperar un evento para continuar su ejecución, tal como la finalización de un timer, el cambio de una bandera o bien el aviso de otra tarea. La espera de una interrupción no puede bloquear directamente a una tarea, pero puede enviarse el aviso de desbloqueo desde el callback de dicha interrupción.
 
  \begin{figure}[t]
 	\centering
@@ -85,16 +90,18 @@ El bloqueo se da cuando una tarea debe esperar un evento para continuar su ejecu
 
 Las tareas interactuan entre sí mediante herramientas de comunicación y de sincronismo.
 
-Las principales herramientas de sincroismo son los semáforos. Un semáforo contiene un contador. \enquote{Ceder} o \enquote{dar} un semáfro aumenta el contador y tomarlo lo disminuye, si se intenta tomar un semáforo que está en cero, la tarea se bloquea. 
+Las principales herramientas de sincroismo son los semáforos. Un semáforo contiene un contador. \enquote{Ceder} o \enquote{dar} un semáforo aumenta el contador y tomarlo lo disminuye, si se intenta tomar un semáforo que está en cero, la tarea se bloquea. 
 
-Un caso particular es el semáforo binario, el cual solo puede aumentar hasta uno, es decir, reconoce dos estados. Es particularmente util para desbloquear una tarea desde otra de forma genérica.
+Un caso particular es el semáforo binario, el cual solo puede aumentar hasta uno, es decir, reconoce dos estados. Es particularmente útil para desbloquear una tarea desde otra de forma genérica.
 
-Un caso particular del semáforo binario es el semáforo de exclusión mutua o \enquote{mutex}, el cual solo puede ser retornado por la misma tarea que lo tomó, se utiliza para proteger espacios de memoria de una escritura por parte de otra tarea, pudeindo quedar el registro en un estado no consistente.
+Un caso particular del semáforo binario es el semáforo de exclusión mutua o \enquote{mutex}, el cual solo puede ser retornado por la misma tarea que lo tomó, se utiliza para proteger espacios de memoria de una escritura por parte de otra tarea, pudiendo dejar los datos compartidos en un estado inconsistente.
 
-Otro méto de sincronismo es la notificación, la cual es mas rápida y eficiente que el semáforo binario pero sirve solo para notificar una tarea en específico.
+Otro método de sincronismo es la notificación, la cual es mas rápida y eficiente que el semáforo binario pero sirve solo para notificar una tarea en específico.
 
-Las estructuras de comunicación tienen como funcionalidad principal enviar datos de una tarea a la otra, aunque tambien pueden utilizarse para la sincronización.
-Ejemlos de estas estructuras son el \textit{stream buffer}, el cual transmite  cadenas de bytes enteros de longitud variable, ideal para flujo continuo de datos, el \textit{messaje buffer}, el cual envía mensajes de bytes enteros de longitud definida, mejor para datos ya filtrados, y la \textit{queue} o cola de mensajes, la cual puede transmitir elementos de tamaño definido, por ejemplo estructuras de datos.
+Las estructuras de comunicación tienen como funcionalidad principal enviar datos de una tarea a la otra, aunque también pueden utilizarse para la sincronización.
+Ejemplos de estas estructuras son el \textit{stream buffer}, el cual transmite  cadenas de bytes enteros de longitud variable, ideal para flujo continuo de datos, el \textit{message  buffer}, el cual envía mensajes de bytes enteros de longitud definida, mejor para datos ya filtrados, y la \textit{queue} o cola de mensajes, la cual puede transmitir elementos de tamaño definido, por ejemplo estructuras de datos.
 
+
+\subsubsection{Comunicación con el servidor}
 
 
