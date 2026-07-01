@@ -20,6 +20,25 @@
 \usepackage{booktabs} % para tablas más limpias
 \usepackage{graphicx}
 \usepackage[style=american]{csquotes}
+
+\usepackage{listings}
+\usepackage{xcolor} % Para darle colores al código
+\usepackage{bytefield}
+\usepackage{graphicx} % Para rotar el texto si es necesario
+
+\usepackage[nopatch=footnote]{microtype}%Corrige supuestamente los Overfull
+
+\lstset{
+	language=C,
+	basicstyle=\ttfamily\small,
+	keywordstyle=\color{blue},
+	commentstyle=\color{green!60!black},
+	stringstyle=\color{orange},
+	numbers=left,
+	numberstyle=\tiny\color{gray},
+	breaklines=true,
+	frame=single,
+}
 % Configuración de márgenes
 %\geometry{top=2.5cm, bottom=2.5cm, left=3cm, right=3cm}
 \geometry{top=2.5cm, bottom=2.5cm, inner=3.5cm, outer=2.5cm}
