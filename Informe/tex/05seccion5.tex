@@ -112,6 +112,8 @@ Los datos entrantes son recibidos en una tarea dedicada de la librería \texttt{
 
 La librería \texttt{app\_uart} se compone de tres funciones y una tarea:
 
+
+\begin{minipage}{\linewidth}
 \begin{lstlisting}
 void uart_init(void);
 void uart_rx_task(void *pvParameters);
@@ -120,7 +122,7 @@ void app_uart_send(uint8_t *trama, int len);
 StreamBufferHandle_t uart_get_rx_streambuffer(void);
 
 \end{lstlisting}
-
+\end{minipage}
 
 La función de inicialización primero crea el stream buffer, el cual es local, por lo que para recuperar los datos se debe acceder a él mediante un \enquote{getter}, es decir una función pública que devuelve la estructura de datos.
 
@@ -142,7 +144,7 @@ Para enviar los datos por uart se creó la función \textit{app\_uart\_send}, a 
 
 La elección de esta arquitectura se debe a que la implementación del protocolo requiere que los datos entrantes se entreguen en un streambuffer y los salientes se reciban mediante un puntero. Manteniendo estas estructuras se podrían desarrollar librerías para que el protocolo opere con diferentes capas físicas, como por ejemplo CAN BUS.
 
-\subsection{Protocolo Ramodbus}
+\subsubsection{Protocolo Ramodbus}
 La implementación de este módulo conllevó un doble desafío, primero la definición de un protocolo de capa de aplicación y segundo la implantación de este como librería, manteniendo robustez, desacoplamiento y portabilidad. Se decidió llamarlo \enquote{Ramodbus} por la inspiración a Modbus y el apellido del desarrollador.
 
 Se evaluó utilizar Modbus RTU, dado que es un protocolo robusto, altamente probado y muy documentado con librerías en múltiples plataformas, además de estar diseñado para trabajar sobre RS-485.
@@ -216,7 +218,8 @@ El protocolo se implementa en una librería propia, cuyo archivo de cabecera def
 
 El protocolo se ejecuta mediante dos tareas: el parser, el cual recibe los datos, los valida y los pasa a la tarea correspondiente a cada comando, y el dispatcher el cual se ocupa de gestionar la transmisión de datos. Ambas funciones son privadas y las tareas se crean mediante la función de inicialización \textit{protocol\_init}, la cual lleva como argumento un puntero a un tipo de dato de configuración:
 
-\begin{lstlisting}
+\begin{minipage}{\linewidth}
+\begin{lstlisting}[frame=single]
 typedef struct{
 	int ctrl_cmds;
 	int st_cmds;
@@ -233,8 +236,7 @@ typedef struct{
 	
 }   protocol_params_t;
 \end{lstlisting}
-
-
+\end{minipage}
 Los primeros campos son las cantidades de comandos de cada tipo, luego le siguen las id del nodo propio y el maestro. Le siguen algunos de los parámetros de configuración de las tareas para que el usuario de la api pueda definir en cada una el stack y la prioridad.  \textit{Buffer\_getter} y \textit{sender}  son datos del tipo 
 
 \begin{lstlisting}
@@ -362,9 +364,7 @@ Esta arquitectura permite minimizar el tiempo de ejecución de la rutina de inte
 
 \subsubsection{Módulo de Identificación NFC}
 
-Para la lectura de credenciales de acceso, se implementó un módulo basado en el transceptor PN532. La elección de este integrado radica en su amplia compatibilidad con protocolos RFID a 13.56 MHz, en particular la norma ISO/IEC 14443A, lo cual permite interactuar fluidamente con etiquetas de la familia NTAG21x (NTAG213, NTAG215 y NTAG216). 
-
-
+Para la lectura de credenciales de acceso, se utilizó un módulo basado en el chip PN532. La elección de este integrado radica en su amplia compatibilidad con protocolos RFID a 13.56 MHz, en particular la norma ISO/IEC 14443A, lo cual permite interactuar fluidamente con etiquetas de la familia NTAG21x (NTAG213, NTAG215 y NTAG216). 
 
 El control del chip se resolvió integrando el componente de software libre \enquote{\texttt{garag\_\_esp-idf-pn532}}. Esta biblioteca abstrae la comunicación SPI de bajo nivel y proporciona una API para la inicialización del controlador, la configuración de sus temporizadores y el envío de comandos al circuito integrado PN532.
 
@@ -375,13 +375,13 @@ El sistema opera bajo dos estados mutuamente excluyentes: Modo Lectura y Modo Pr
 El árbitro, a su vez, reacciona directamente a las peticiones del coordinador central. Utiliza un semáforo binario cedido por maestro para alternar el estado. Si se recibe el comando de programación (\textit{CMD\_PROGMODE}), el sistema entra en una ventana de tiempo limitada (\textit{timeout}) para configurar una nueva etiqueta. Si no se detecta actividad o finaliza el tiempo, el sistema retorna de forma segura a su estado natural de lectura, garantizando la operatividad ininterrumpida del control de acceso.
 
 
-Uno de los mayores desafíos en sistemas de identificación por radiofrecuencia es la mitigación de ataques de clonación y repetición. Para abordar esto, el sistema no se limita a leer el UID (Identificador Único) de 7 bytes de la tarjeta, sino que implementa un esquema de autenticación dinámica y contadores de lectura.
+Uno de los mayores desafíos en sistemas de identificación por radiofrecuencia es la mitigación de ataques de clonación y repetición. Para abordar esto, el sistema no se limita a leer el UID (Identificador Único) de 7 bytes de la tarjeta, sino que implementa un esquema de autenticación dinámica y contadores de lectura, aprovechando el contandor ya incorporado en el firmware de los tags.
 
 Durante el modo de programación, al detectar una tarjeta NTAG virgen, el sistema ejecuta una función de derivación de claves utilizando HMAC-SHA256 (mediante la librería \textit{mbedtls}). Se utiliza una clave maestra residente en el firmware del equipo y el UID único de la tarjeta para generar un hash de 32 bytes. Los primeros 6 bytes de este hash se truncan y se inyectan en la memoria de la NTAG para configurar el \textit{Password} (PWD) de 4 bytes y el \textit{Password Acknowledge} (PACK) de 2 bytes. 
 
 De esta forma, cada credencial del sistema posee una contraseña única matemáticamente vinculada a su hardware que se calcula en el acto, evitando la vulnerabilidad de alojar contraseñas en una base de datos.
 
-Adicionalmente, se configuran los registros de control de la NTAG para activar la función \textit{ASCII Mirror}. Esta característica escribe automáticamente el valor actual de un contador de interacciones interno de la etiqueta en la memoria de usuario cada vez que la tarjeta es energizada por el campo de radiofrecuencia.
+Adicionalmente, se configuran los registros de control de la NTAG para activar la función \textit{ASCII Mirror}. Esta característica escribe automáticamente el valor actual del contador de interacciones interno de la etiqueta en la memoria de usuario cada vez que la tarjeta es leída. Se le llama espejado ASCII, ya que el valor del contador, alojado internamente en 3 bytes, se escribe en formato ASCII, es decir que el número que se guarda es el valor ASCII del caracter con el que se leería el número en formato hexadecimal, ocupado el doble de espacio. Por ejemplo el byte 0x2F (47 en decimal) se guardaría como 50 70, es decir los valores del caracter \enquote{2} y el caracter \enquote{F}.
 
 \begin{table}[H]
     \centering
@@ -399,7 +399,7 @@ Adicionalmente, se configuran los registros de control de la NTAG para activar l
     \label{tab:ntag_registers}
 \end{table}
 
-El byte MIRROR contiene las configuraciones del espejado ASCII,  se configura con el valor 0x85  Los dos bits más significativos indican que el espejado se realizará sobre el contador al configurarse como. Los siguientes dos indican en que posición de la página seleccionada sé  comienza a escribir el dato, en este caso al principio. El bit 2 es la habilitación de modulación fuerte, la cual se deja por defecto en 1 mientras que los demás bits están reservados y se mantienen en 0.
+El byte MIRROR contiene las configuraciones del espejado ASCII,  se configura con el valor 0x85  Los dos bits más significativos indican que el espejado se realizará sobre el contador (siendo las otras opciones espejar la UID, ambos o ninguno). Los siguientes dos indican en que posición de la página seleccionada sé  comienza a escribir el dato, en este caso al principio. El bit 2 es la habilitación de modulación fuerte, la cual se deja por defecto en 1 mientras que los demás bits están reservados y se mantienen en 0.
 
 Todos los bytes notados \enquote{RFUI} son de reserva y se mantienen en su valor por defecto 0x00.
 El byte MIRROR\_ PAGE determina en que página se escribirá el espejo contador.
@@ -419,3 +419,92 @@ Superada la barrera de seguridad, se emite un comando de lectura rápida (\texti
 Finalmente, la información a reportar se condensa en un \textit{payload} de 10 bytes: los 7 bytes correspondientes al UID físico de la tarjeta, seguidos de 3 bytes que representan el valor del contador dinámico. Este bloque de datos se despacha mediante la función \textit{composer} de Ramodbus bajo el comando \textit{CMD\_NFC}, sincronizando el envío mediante un semáforo para asegurar la integridad de la memoria compartida hasta que el despachador de la capa de red confirme su transmisión hacia el servidor.
 
 Se puede, mediante un comando de las NTAG, acceder al valor del contador de forma directa, sin tener que leer un registro ni convertirlo desde ASCII a un número, pero este comando no aumenta el contador como una lectura, por lo que para usarlo debería realizarse una lectura a un registro cualquiera, lo cual agrega puntos de falla en la comunicación del tag con el módulo.
+
+\subsubsection{Comunicación con la ESP32 CAM}
+Para comunicar el controlador principal con el módulo de la cámara, se estableció una comunicación UART, asociado al periférico UART 2 del ESP32. 
+
+El protocolo UART está diseñado para conexiones punto a punto y permite la comunicación full duplex, lo que simplifica esta implementación respecto a la del servidor, dado que no es necesasrio preocuparse por arbitrajes ni colisiones. Asimismo, al ser una comunicación menos crítica y de menor distancia, se reemplazó el CRC como método de verificación de tramas por un checksum.
+
+La librería \textit{uart\_cam} abarca tanto la recepción y el envío de datos, como su procesamiento, \enquote{resumiendo} las dos bibliotecas que se utilizan en la comunicación principal.
+
+La tarea \textit{cam\_uart\_rx\_task} es muy similar a su contraparte de la UART 1, solo que valida en el acto el checksum y, si correspondiera envía el mensaje de error. Posteriormente, retranmite la información recibida (confirmaciones de acciones) al servidor mediante el \textit{composer}
+
+Para el envío de datos se programó la función \textit{cam\_uart\_send}, que calcula el checksum y envía la trama. Esta simpleza se debe que al tratarse de una comunicación full duplex, el ESP32CAM siempre está \enquote{escuchando} y no se requieren de condiciones previas para transmitir un mensaje.
+
+Se desarrollaron tabién módulos relativos a las funcionalidades de la ESP32 CAM, que actuan como puentes entre esta y el servidor. 
+
+\subsubsection{Comando de la conectividad WiFi}
+Para administrar la conexión de la ESP32 CAM a la red local de la institución se desarrolló un módulo intermedio que se comunica con el servidor de forma directa y replica las órdenes al periférico.
+El Wifi se comanda mediante un comando de flujo, es decir que tiene un payload determinado. Se decidió utilizar un solo comando para administrar todos los casos posibles desde la misma tarea.
+Se definió que el payload máximo admisible en una trama sea de 10 bytes, la cantidad exacta para las UID y los tres bytes del contador en las transacciones NFC. No se definió un número mayor para ahorrar memoria, ya que se reserva memora para n buffers de mensaje de longitud igual. Esto pone en apuros mensajes que puedan llegar a ser más extensos, como por ejemplo las credenciales de conexión a la red. 
+Es por esto que se estableció que, de ser necesario, se subdivida el payload en trozos o \enquote{chunks}, quedando el payload definido de la siguiente forma:
+
+\begin{itemize}
+	\item \textbf{Byte 0:} Subcomando, reconoce cuatro posibles, dos de ellos no requieren más payload y los otros dos sí.
+	\item \textbf{Byte 1:} chunk actual
+	\item \textbf{Byte 2:} cantidad total de chunks
+	\item \textbf{Bytes 3 al 9:} datos
+\end{itemize}
+
+De forma tal que se envían de máximo siete bytes de información por vez.
+Los subcomandos que conllevan payload son los de cambio de SSID (Nombre de la red) y de contraseña de acceso. Los restantes son una orden de conectar y desconectarse de la red, esto para mantener el sistema desconectado fuera de horario de uso, ya que la antena de radio requiere un consumo de energía no despreciable.
+
+La tarea que reacciona a la llegada de mensajes se dedica a parsear los subcomandos, en el caso de las credenciales, las almacena localmente ya armadas, y apenas se cambien ambas las envía a la ESP32 CAM. En el caso de las órdenes directas, las retransmite directamente.
+
+
+\subsubsection{Comando de la cámara}
+El módulo intermedio de la cámara realiza funciones similares. Se compone de dos tareas. 
+Una reacciona al semáforo del comando \enquote{CMD\_TAKE\_PH}, liberado por una orden del servidor o bien por el callback de la interrupción del pulsador, y envía la orden de tomar una fotografía al módulo de la cámara.
+
+La otra tarea reacciona al comando de flujo que establece la URL del servidor HTTP al cual deben transmitirse las imágenes. El payload de este comando consta de cuatro bytes que conforman la dirección ip del servidor y otros dos que representan el número de puerto, la tarea genera una string del tipo \enquote{\texttt{http://192.168.XX.XX:XXXX/upload}} y la transmite al controlador secundario.
+
+
+\subsection{Firmware del ESP32 CAM}
+Para el kit de desarrollo ESP32 CAM, la arquitectura de software resulta a grandes rasgos una versión simplificada de la del controlador principal, manteniaendo la arquitectura de tareas de FreeRTOS para manejar las distintas responsabilidades y reaccionar a los distintos eventos de forma concurrente, respondiendo a comandos exernos y devolviendo confirmaciones e información relevante.
+
+
+\subsubsection{Comunicación UART}
+La ESP32 CAM ocupa el rol de un periférico, por lo que si bien la comunicación es punto a punto y no podemos hablar de un \enquote{esclavo}, conceptualmente se puede decir que está en una jerarquía inferior al controlador principal, es por eso que el comportamiento de la librería uart se asemeja más al de un esclavo ramodbus simplificado. 
+Se tomó como base la misma librería \textit{uart\_cam} pero adaptada. La configuración se mantuvo tal cual, utilizando incluso el mismo periférico UART 2. 
+
+La tarea \textit{cam\_uart\_rx\_task} es bastante similar a su contraparte, la recepción y validación se mantienen, mientras que el parseo se comporta de manera similar a ramobdus, liberando semáforos o transimitiendo buffers de mensaje si bien corresponda, solo qué resuelto de forma \enquote{manual} en la misma tarea dadas las pocas opciones.
+
+Se añaden funciones getter para el buffer de mensajes de Wifi, el buffer de URL del servidor HTTP y el semáforo que indica tomar una fotografía.
+
+Se mantiene también la función de envío  \textit{cam\_uart\_send}.
+
+
+\subsubsection{Conexión WiFi}
+El módulo de gestión WiFi en la ESP32 CAM tiene como propósito administrar la interfaz de red inalámbrica en modo \textit{Station}. Al operar como un periférico subordinado al controlador principal, su comportamiento está supeditado a los comandos recibidos por UART, pero mantiene cierta autonomía para gestionar la persistencia del enlace y el ahorro de energía.
+
+Como se detalló en el apartado del controlador principal, si bien este recibe las credenciales divididas en \enquote{chunks} debido a las limitaciones de memoria de los buffers de mensaje, este se encarga de reensamblarlas. Por consiguiente, la ESP32 CAM recibe las credenciales (\textit{SSID} y \textit{Password}) en estructuras planas y completas.
+
+Para manejar el flujo de red de forma concurrente sin bloquear la recepción de comandos, la arquitectura se dividió aprovechando las herramientas de FreeRTOS y el \textit{framework} nativo del microcontrolador:
+
+\begin{itemize}
+    \item \textbf{Recepción de comandos (\textit{app\_wifi\_com\_task}):} Esta tarea permanece bloqueada aguardando datos en un \textit{MessageBuffer} alimentado por la recepción de la UART. Al recibir una trama, evalúa el primer byte para identificar el comando. Si se trata de credenciales de red, actualiza los arreglos globales en RAM de forma segura. Si recibe un comando de acción (\texttt{WFON} o \texttt{WFOFF}), invoca las funciones del driver WiFi para encender, apagar o reconectar el periférico, estableciendo una bandera fundamental: \texttt{WIFI\_MUSTBE\_BIT}.
+    
+    \item \textbf{Gestión de eventos (\textit{event\_handler}):} Actúa como un \textit{callback} que reacciona a los eventos internos del sistema (como desconexiones físicas o la obtención de una IP). Aquí reside la resiliencia del enlace: si ocurre una desconexión accidental, se verifica el estado de la bandera \texttt{WIFI\_MUSTBE\_BIT}. Si el sistema \enquote{debería} estar conectado, el \textit{handler} dispara automáticamente una secuencia de reintentos sin necesidad de intervención externa.
+    
+    \item \textbf{Mantenimiento y persistencia (\textit{app\_wifi\_task}):} Una tarea de bajo peso dedicada a reaccionar a las banderas de un \textit{EventGroup} (\texttt{s\_wifi\_event\_group}). Su función principal es descargar de tareas bloqueantes al flujo principal, encargándose de los ciclos de reconexión y de escribir las nuevas credenciales en la memoria no volátil (NVS), garantizando que la cámara recuerde la red tras un reinicio.
+\end{itemize}
+
+Finalmente, la comunicación fluye también en sentido inverso. Cuando la ESP32 CAM logra conectarse a la red y el router le asigna una dirección, el evento \texttt{IP\_EVENT\_STA\_GOT\_IP} empaqueta los 4 bytes correspondientes a la dirección IPv4 obtenida y los transmite de regreso al ESP mediante la función \textit{cam\_uart\_send} para que este los retransmita al servidor. Esta confirmación es crítica para que el servidor central sepa a qué IP exacta debe realizar las peticiones HTTP a la hora de capturar una fotografía.
+
+
+\subsection{Cámara}
+El módulo encargado de la captura de imágenes toma como base el componente oficial del fabricante \textit{espressif/esp32-camera}. Esta biblioteca provee una API de alto nivel que abstrae la complejidad de los buses I2S e I2C (SCCB), requiriendo únicamente la inicialización mediante una estructura de configuración. Los parámetros se adaptaron de los ejemplos provistos por el fabricante, estableciendo el formato de salida en JPEG y la resolución en SVGA para equilibrar calidad de imagen y uso de memoria.
+
+Para mantener la concurrencia del sistema, la lógica se dividió en dos tareas independientes de FreeRTOS:
+
+La \texttt{url\_task} aguarda la recepción de una trama UART proveniente del controlador principal que contiene la dirección IP y el puerto del servidor HTTP. Al recibirla, formatea la URL de destino y la almacena en la memoria no volátil (NVS) mediante \texttt{nvs\_set\_str}. Esta persistencia permite que el periférico mantenga su configuración ante reinicios o cortes de energía, inicializando el cliente HTTP sin requerir una nueva intervención del controlador principal.
+
+Mientras tanto la \texttt{camara\_task} es la tarea central del módulo. Permanece bloqueada a la espera de que se libere el semáforo \texttt{cmd\_sem}, disparado por un evento de acceso (como la validación de una credencial NFC). Al activarse, la rutina ejecuta una secuencia crítica para asegurar la calidad de la captura:
+
+\begin{enumerate}
+    \item \textbf{Purga de \textit{Frame Buffer}:} Debido al comportamiento del controlador DMA de la cámara, el búfer suele retener una imagen capturada instantes antes o presentar artefactos visuales tras periodos de inactividad. Para solucionar esto, el firmware solicita una primera captura que es descartada inmediatamente (\textit{dummy frame}), forzando al hardware a exponer y capturar una nueva imagen.
+    \item \textbf{Iluminación y Captura:} Simultáneamente a la solicitud del segundo \textit{frame} (la captura real), se enciende el LED de alta potencia de la placa para garantizar la correcta iluminación del sujeto, apagándose inmediatamente al obtener los datos.
+    \item \textbf{Transmisión HTTP y Tolerancia a Fallos:} La imagen en formato JPEG se envía mediante un método POST al servidor. Se implementó una lógica de resiliencia que realiza hasta tres reintentos en caso de fallos de red o de respuesta del servidor (tiempos de espera o rechazos). Si el fallo persiste, se liberan y reconstruyen los recursos del cliente HTTP para evitar bloqueos futuros.
+\end{enumerate}
+
+Finalmente, de forma independiente al resultado de la transacción HTTP, se transmite una trama de confirmación por UART (\texttt{UART\_CAM\_PH\_CMD}). Esta señal impacta en el controlador principal para que libere el flujo lógico e informe al servidor central, el cual será el responsable final de verificar el ingreso físico del nuevo archivo de imagen.
