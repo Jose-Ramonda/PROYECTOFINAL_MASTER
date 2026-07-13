@@ -7,7 +7,8 @@ import serial
 import struct
 import time
 import queue
-from . import config
+import config
+from modulos import nexo
 
 
 ser = None #Creo el objeto serial global, lo incializo luego
@@ -88,7 +89,7 @@ def listener():
 
 
 
-def comunicacion(cola_salida, cola_entrada):    
+def comunicacion_task(cola_salida, cola_entrada):    
 
     #cola entrada es una cola que envia los datos recibidos al parser en el otro hilo
     #cola salida es un diccionario con cada cola de cada comando que se quiera mandar a cada nodo
@@ -115,6 +116,7 @@ def comunicacion(cola_salida, cola_entrada):
     while True:     
         #Aca hacemos el polling
         indata = {
+            "id_nodo" : 0,
             "cmd" : 0,
             "payload" : None
         }
@@ -130,7 +132,7 @@ def comunicacion(cola_salida, cola_entrada):
                     data = cola_salida[id_nodo].get_nowait() #Si hay algo para mandar
                     sender(id_nodo,data["cmd"] ,data["payload"]) #pues lo mando
                 except queue.Empty:
-                    sender(id_nodo,config.CMD_POLL ,"") #Si la cola de ese nodo está vacía, mando un polling
+                    sender(id_nodo,config.CMD_POLL ,b"") #Si la cola de ese nodo está vacía, mando un polling
                 #Ahora recibo
                 res = listener() # intento recibir respuesta
                 if res == None:
@@ -147,6 +149,7 @@ def comunicacion(cola_salida, cola_entrada):
                     elif indata["cmd"] == config.CMD_NACK and data["cmd"] !=0: #si legó mal, y lo que mande no era un polling
                         cola_salida[id_nodo].put(data)  #vuelvo a encolar para el otro siclo
                     else:
+                        indata["id_nodo"] = id_nodo
                         cola_entrada.put(indata)
             elif estados_nodos[id_nodo]["status"] == "OFFLINE":
                 continue

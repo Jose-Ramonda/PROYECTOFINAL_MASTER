@@ -40,3 +40,6 @@ CMD_WIFI = 101
 CMD_UID = 102
 CMD_URL = 103
 
+#Parametros MQTT
+MQTT_BROKER = "localhost"
+MQTT_PORT = 1883

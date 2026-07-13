@@ -1,13 +1,21 @@
 #   Archivo de librería intermedia entre libreria ramodbus 
+#   Incluye funcion de API para encolar datos a enviar, funcion privada parser, hilo escucha cmd recibidos para parseo
 #   Autor: José Ramonda
-#   Ultima modificación: 8/7/2026
+#   Ultima modificación: 10/7/2026
 
 import queue
 import time
-from . import config
+import config
+import main_mqtt
 
-# Función global/pública para que CUALQUIER módulo futuro envíe comandos
-def enviar_comando_a_nodo(cola_salida, id_nodo, comando, payload=b""):
+#Creo las colas del sistema
+
+cola_entrada = queue.Queue() #Cola de entrada, que se parsea
+cola_salida = {}    #arreglo (tupla) de colas, una por nodo, para enviar datos afuera
+for id_nodo in config.NODOS_ID:
+    cola_salida[id_nodo] = queue.Queue()
+
+def encolar(id_nodo, comando, payload=b""):# Función pública, con la llamada a la API se envian datos para enviar comandos
 
     if id_nodo in cola_salida:
         # Armamos la estructura idéntica a la que espera tu hilo serial
@@ -21,35 +29,42 @@ def enviar_comando_a_nodo(cola_salida, id_nodo, comando, payload=b""):
         print(f"[LOGICA ERROR] El nodo {hex(id_nodo)} no existe en el sistema.")
 
 
-def parser_data_nodo(evento):
+def parser(evento):
 
     cmd = evento["cmd"]
     id_nodo = evento["id_nodo"]
     payload = evento["payload"]
 
-
-    # Aquí mapeas las acciones según tus macros de config.py
+    topico_nodo = f"sbc/status/{hex(id_nodo)}"
+    # no uso switch case porque en  python no es muy intuitivo, lo ifeo todo
     if cmd == config.CMD_NFC:
         uid = payload.hex()
         print(f"[PARSER - NFC] Tarjeta leída en nodo {hex(id_nodo)}. UID: {uid}")
-        # TODO: Aquí llamarías a la validación de base de datos SQLite en el futuro.
-        # Si la BD dice OK -> enviar_comando_a_nodo(..., id_nodo, config.CMD_DOOR)
+        # TODO: aca hacemos lo que hay que hacer
+        
 
-    elif cmd == config.CMD_WIFI:
-        print(f"[PARSER - WIFI] El nodo {hex(id_nodo)} reporta estado de su conexión.")
+    elif cmd == config.CMD_DOOR:
+        print(f"[PARSER - PUERTA] El nodo {hex(id_nodo)} reporta APERTURA DE LA PUERTA.")
+        main_mqtt.publicar_mensaje(topico_nodo, "OK_PUERTA")
 
     elif cmd == config.CMD_READY:
         print(f"[PARSER - STATUS] El nodo {hex(id_nodo)} reporta que está listo.")
+    
+    elif cmd == config.CMD_WIFI:
 
+        ip_detectada = ".".join(str(b) for b in payload)
+        print(f"[PARSER - WIFI] El nodo {hex(id_nodo)} reporta IP: {ip_detectada}")
+        main_mqtt.publicar_mensaje(topico_nodo, ip_detectada)
+
+    elif cmd == config.CMD_TAKE_PH:
+        main_mqtt.publicar_mensaje(topico_nodo,"OK_FOTO")
+    
     else:
         print(f"[PARSER ALERTA] Comando {cmd} desconocido o no implementado.")
 
 
-def hilo_logica(cola_entrada, cola_salida):
-    """
-    Bucle principal del hilo de lógica intermedia.
-    Escucha de forma eficiente todo lo que el hilo serial tira en cola_entrada.
-    """
+def nexo_task():#hilo uqe escucha y llama a parsear
+    
     print("[LOGICA] Hilo de lógica intermedia iniciado y escuchando...")
 
     while True:
@@ -64,7 +79,7 @@ def hilo_logica(cola_entrada, cola_salida):
                 # TODO: Avisar a Telegram sobre la caída del nodo administrativo
             else:
                 # Si no es una alerta del driver, es data cruda de un nodo: la pasamos al parser
-                parser_data_nodo(evento)
+                parser(evento)
 
         except queue.Empty:
             # No llegó nada en este segundo, volvemos a intentar (mantiene el bucle vivo)
