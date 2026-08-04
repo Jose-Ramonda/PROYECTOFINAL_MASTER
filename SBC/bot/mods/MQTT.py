@@ -45,7 +45,18 @@ async def enviar_directo_sincrono(chat_id, evento, nombre_nodo, data):
                 texto = f"Confirmado: El acceso {nombre_nodo} ha sido abierto de forma correcta."
                 await _bot_inyector.send_message(chat_id=chat_id, text=texto)
                 
-            # Caso 2: Foto de control solicitada por un usuario (Imagen + Epígrafe)
+            # Caso 2: clonacion de credenciales
+            elif evento == "alerta":
+                # data contiene el nombre del titular afectado (ej: "Jose Ramonda")
+                texto = (
+                    f"¡ALERTA CRITICA DE SEGURIDAD!\n\n"
+                    f"Se ha detectado un intento de acceso con una tarjeta CLONADA.\n"
+                    f"Titular: {data}\n"
+                    f"Acceso: {nombre_nodo}\n\n"
+                    f"La tarjeta implicada ha sido BLOQUEADA en el sistema automáticamente."
+                )
+                await _bot_inyector.send_message(chat_id=chat_id, text=texto)
+            # Caso 3: Foto de control solicitada por un usuario (Imagen + Epígrafe)
             elif evento == "foto_solicitada_ok":
                 if os.path.exists(data):
                     with open(data, 'rb') as foto:
@@ -58,7 +69,7 @@ async def enviar_directo_sincrono(chat_id, evento, nombre_nodo, data):
                     texto = f"Error: Archivo no encontrado para la foto solicitada en {nombre_nodo}."
                     await _bot_inyector.send_message(chat_id=chat_id, text=texto)
                     
-            # Caso 3: Alerta espontánea por Timbre físico (Imagen + Epígrafe)
+            # Caso 4: Alerta espontánea por Timbre físico (Imagen + Epígrafe)
             elif evento == "foto_espontanea_ok":
                 if os.path.exists(data):
                     with open(data, 'rb') as foto:
@@ -71,7 +82,7 @@ async def enviar_directo_sincrono(chat_id, evento, nombre_nodo, data):
                     texto = f"Alerta: Estan tocando el timbre en {nombre_nodo} (Fotografia no disponible)."
                     await _bot_inyector.send_message(chat_id=chat_id, text=texto)
 
-            # Caso 4: Errores de hardware reportados desde Node-RED
+            # Caso 5: Errores de hardware reportados desde Node-RED
             elif evento == "foto_error":
                 texto = f"Alerta de hardware en {nombre_nodo}: Fallo el disparo de la camara.\nDetalle: {data}"
                 await _bot_inyector.send_message(chat_id=chat_id, text=texto)
@@ -99,7 +110,7 @@ def _on_message_notificaciones(client, userdata, msg):
         print(f"[BOT-MQTT IN] Evento: {evento.upper()} | Nodo: {nombre_nodo} | Destino: {destino}")
         
         # Lista de eventos válidos que sabe procesar nuestro despachador
-        eventos_validos = ["puerta_ok", "foto_solicitada_ok", "foto_espontanea_ok", "foto_error", "timbre_sin_foto"]
+        eventos_validos = ["puerta_ok", "foto_solicitada_ok", "foto_espontanea_ok", "foto_error", "timbre_sin_foto", "alerta"]
         if evento not in eventos_validos:
             return  # Ignoramos eventos desconocidos o mal formateados
 

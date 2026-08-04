@@ -88,70 +88,81 @@ def listener():
     return cmd[0], payload
 
 
-
 def comunicacion_task(cola_salida, cola_entrada):    
-
-    #cola entrada es una cola que envia los datos recibidos al parser en el otro hilo
-    #cola salida es un diccionario con cada cola de cada comando que se quiera mandar a cada nodo
-
-    #inicio la comunicación serie
     global ser
     ser = serial.Serial(
-        port=config.PORT,  # cambiar si hace falta
+        port=config.PORT,
         baudrate=config.BAUD_RATE,
-        timeout= config.SERIAL_TIMEOUT
+        timeout=config.SERIAL_TIMEOUT
     )
 
-    #Creo los status de los nodos
-    estados_nodos = {}  #Diccionario
+    estados_nodos = {}
     for id_nodo in config.NODOS_ID:
         estados_nodos[id_nodo] = {
             "status": "ONLINE",
             "n_retry": 0,
             "last": time.time()
-        }   #Lleno con status
-    
-
+        }
 
     while True:     
-        #Aca hacemos el polling
-        indata = {
-            "id_nodo" : 0,
-            "cmd" : 0,
-            "payload" : None
-        }
-        data = {
-            "cmd" : 0,
-            "payload" : None
-        }
-
         for id_nodo in config.NODOS_ID:
-            if estados_nodos[id_nodo]["status"] == "ONLINE":    #Si el nodo anda
-                #Mando el pollin/comando
-                try:
-                    data = cola_salida[id_nodo].get_nowait() #Si hay algo para mandar
-                    sender(id_nodo,data["cmd"] ,data["payload"]) #pues lo mando
-                except queue.Empty:
-                    sender(id_nodo,config.CMD_POLL ,b"") #Si la cola de ese nodo está vacía, mando un polling
-                #Ahora recibo
-                res = listener() # intento recibir respuesta
-                if res == None:
-                    estados_nodos[id_nodo]["n_retry"] +=1   #si falla subo
-                    if estados_nodos[id_nodo]["n_retry"] >= config.MAX_REINTENTOS:  #me fijo aca para no hacer comparaciones en flujo normal
-                        estados_nodos[id_nodo]["n_retry"] = 0
-                        estados_nodos[id_nodo]["status"] = "OFFLINE"
-                        #TODO aca mandar afuera un aviso, ver despues
-                        estados_nodos[id_nodo]["last"] = time.time()#esto no se si usarlo o mandar diagnostico a demanda, queda en veremos
-                else:   #si llega bien
-                    indata["cmd"],indata["payload"] = res
-                    if indata["cmd"] == config.CMD_ACK: #si es un miserable ACK
-                        continue #no hago nada
-                    elif indata["cmd"] == config.CMD_NACK and data["cmd"] !=0: #si legó mal, y lo que mande no era un polling
-                        cola_salida[id_nodo].put(data)  #vuelvo a encolar para el otro siclo
-                    else:
-                        indata["id_nodo"] = id_nodo
-                        cola_entrada.put(indata)
-            elif estados_nodos[id_nodo]["status"] == "OFFLINE":
+            if estados_nodos[id_nodo]["status"] == "OFFLINE":
+                # TODO: Lógica de reconexión paulatina aquí si se desea
                 continue
+
+            # 1. Definimos variables LOCALES por cada nodo en esta iteración
+            data = {"cmd": config.CMD_POLL, "payload": b""}
+            
+            # 2. Obtenemos comando o hacemos polling
+            try:
+                data = cola_salida[id_nodo].get_nowait()
+            except queue.Empty:
+                data = {"cmd": config.CMD_POLL, "payload": b""}
+
+            # 3. Transmisión
+            sender(id_nodo, data["cmd"], data["payload"])
+
+            # 4. Recepción
+            res = listener()
+            
+            if res is None:
+                # Fallo de respuesta / Timeout
+                estados_nodos[id_nodo]["n_retry"] += 1
+                
+                # Si falló un comando real (no polling), lo volvemos a encolar para no perderlo
+                if data["cmd"] != config.CMD_POLL:
+                    cola_salida[id_nodo].put(data)
+
+                if estados_nodos[id_nodo]["n_retry"] >= config.MAX_REINTENTOS:
+                    estados_nodos[id_nodo]["n_retry"] = 0
+                    estados_nodos[id_nodo]["status"] = "OFFLINE"
+                    print(f"[SERIAL WARN] Nodo {hex(id_nodo)} pasó a OFFLINE")
+                
+                # Descartamos basura del buffer serie tras un timeout/error
+                ser.reset_input_buffer()
+
+            else:
+                # Llegó respuesta válida: reseteamos contador de reintentos
+                estados_nodos[id_nodo]["n_retry"] = 0
+                cmd_recibido, payload_recibido = res
+
+                if cmd_recibido == config.CMD_ACK:
+                    #print("[DEBUG BUS] Fue un misero ACK, no va a la cola_entrada.")
+                    pass # Se procesó OK por el nodo, no requiere más acción
+
+                elif cmd_recibido == config.CMD_NACK and data["cmd"] != config.CMD_POLL:
+                    # El nodo rechazó la trama, re-encolamos para reintentar
+                    cola_salida[id_nodo].put(data)
+
+                else:
+                    # Novedad o evento enviado por el nodo -> Creamos DICCIONARIO NUEVO (sin referencias compartidas)
+                    indata = {
+                        "id_nodo": id_nodo,
+                        "cmd": cmd_recibido,
+                        "payload": payload_recibido
+                    }
+                    print(f"[DEBUG BUS] Encolando evento a la entrada evento {indata['cmd']}")
+                    cola_entrada.put(indata)
+
+            # 5. TIEMPO DE GUARDA OBLIGATORIO: Se ejecuta SIEMPRE al final de atender cada nodo
             time.sleep(config.POLLING_TIME)
-            #TODO ver reconexiones

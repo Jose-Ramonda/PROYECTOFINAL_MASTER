@@ -23,11 +23,21 @@ def menu_usuario():
     return InlineKeyboardMarkup(botones)
 
 def menu_administrador():
-    """Genera el teclado interactivo para el rol de Administrador"""
+    """Genera el teclado interactivo para el rol de Administrador con gestión NFC y CSV"""
     botones = [
         [
             InlineKeyboardButton("Listar Usuarios", callback_data="adm_listar"),
             InlineKeyboardButton("Modificar Credenciales", callback_data="adm_modificar")
+        ],
+        
+        [
+            # [NUEVO] Botón para disparar el modo programación por hardware
+            InlineKeyboardButton("Agregar tags", callback_data="adm_progmode_menu")
+        ],
+        [
+            # [NUEVO] Botones para la gestión rústica del archivo Excel/CSV
+            InlineKeyboardButton("Descarar padrón de accesos", callback_data="adm_bajar_csv"),
+            InlineKeyboardButton(" Subir padrón de accesos", callback_data="adm_subir_csv")
         ],
         [
             # Permite al admin volver a la interfaz de usuario normal
@@ -35,6 +45,17 @@ def menu_administrador():
         ]
     ]
     return InlineKeyboardMarkup(botones)
+
+
+def menu_finalizar_progmode(id_nodo):
+    """Genera el botón de parada incluyendo el ID real del nodo en el callback"""
+    botones = [
+        [
+            InlineKeyboardButton("Finalizar Programación", callback_data=f"cmd_progstop_{id_nodo}")
+        ]
+    ]
+    return InlineKeyboardMarkup(botones)
+
 
 def submenu_nodos(accion):
     """

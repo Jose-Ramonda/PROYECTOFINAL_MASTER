@@ -12,7 +12,8 @@ from modulos.nexo import nexo_task
 from modulos.nexo import cola_entrada, cola_salida
 from modulos.nexo import encolar
 from modulos.serie import comunicacion_task
-
+from modulos.main_mqtt import arrancar_listener_global
+from modulos.accesos import cargar_padron_a_ram
 def main():
     print("==================================================")
     print("=                     Iniciando                  =")
@@ -28,16 +29,25 @@ def main():
         daemon=True
     )
 
+    hilo_mqtt = threading.Thread(target=arrancar_listener_global, daemon=True)
+
+    #Cargo el padron a ram
+    cargar_padron_a_ram()
+
     #daemon True => los hilos son sub hilos del main, si pongo false y termino el programa main siguen andadno y tengo que matarlos por terminal
     # Lanzo los hilos
     print("[MAIN] Lanzando hilos de ejecución...")
     hilo_nexo.start()
     hilo_serial.start()
+    hilo_mqtt.start()
     print("[MAIN] Hilos corriendo. Sistema operativo en escucha.")
 
     time.sleep(5)
-    encolar(0x0A,config.CMD_DOOR,b"")
+    #encolar(0x0A,config.CMD_DOOR,b"")
     # Bucle infinito del hilo principal para poder cerrarlo por teclado
+
+    #Recargamos el padron a Ram periodicamente
+    contador = 0
     try:
         while True:
             time.sleep(1)  # Bloqueo de 1 segundo

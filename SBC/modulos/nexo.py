@@ -5,15 +5,22 @@
 
 import queue
 import time
-import config
-import main_mqtt
+import json
+import time
 
+import config       # Si config.py estuviera adentro, pero ojo...
+from . import main_mqtt
+from . import accesos
 #Creo las colas del sistema
 
 cola_entrada = queue.Queue() #Cola de entrada, que se parsea
 cola_salida = {}    #arreglo (tupla) de colas, una por nodo, para enviar datos afuera
 for id_nodo in config.NODOS_ID:
     cola_salida[id_nodo] = queue.Queue()
+
+
+#Tiempo de ultimo comando nfc
+last =0
 
 def encolar(id_nodo, comando, payload=b""):# Función pública, con la llamada a la API se envian datos para enviar comandos
 
@@ -37,13 +44,7 @@ def parser(evento):
 
     topico_nodo = f"sbc/status/{hex(id_nodo)}"
     # no uso switch case porque en  python no es muy intuitivo, lo ifeo todo
-    if cmd == config.CMD_NFC:
-        uid = payload.hex()
-        print(f"[PARSER - NFC] Tarjeta leída en nodo {hex(id_nodo)}. UID: {uid}")
-        # TODO: aca hacemos lo que hay que hacer
-        
-
-    elif cmd == config.CMD_DOOR:
+    if cmd == config.CMD_DOOR:
         print(f"[PARSER - PUERTA] El nodo {hex(id_nodo)} reporta APERTURA DE LA PUERTA.")
         main_mqtt.publicar_mensaje(topico_nodo, "OK_PUERTA")
 
@@ -57,8 +58,67 @@ def parser(evento):
         main_mqtt.publicar_mensaje(topico_nodo, ip_detectada)
 
     elif cmd == config.CMD_TAKE_PH:
+        print(f"[PARSER - CAMARA] El nodo {hex(id_nodo)} reporta fotografía tomada")
         main_mqtt.publicar_mensaje(topico_nodo,"OK_FOTO")
+
+    elif cmd == config.CMD_NFC:
+        #intento hacer la ruta de apertura lo mas rápida posible
+
+
+        ahora = time.time()
+        global last
+
+        if (ahora - last) < 3.0 :
+            return
+
+            
+        trama = payload.hex().upper()
+        print(f"Intento de ingreso {trama}")
+        last = time.time()
+        exito, resultado = accesos.validar(trama)
+        if exito:
+            encolar(id_nodo,config.CMD_DOOR,b"")    #Primero que nada mando a abrir
+            #Luego lo demas interno
+            #titular = resultado   #Innecesario, porngo resultado   
+            uid_hexa = payload[0:7].hex().upper() if len(payload) >= 7 else "ERROR"
+            accesos.registrar_evento_en_log(uid_hexa,resultado,hex(id_nodo).upper(),"INGRESO")
+            
+        else:
+            uid_hexa = payload[0:7].hex().upper() if len(payload) >= 7 else "ERROR"
+            
+            if resultado.startswith("CLONACION:"):
+                titular_afectado = resultado.split(":")[1]
+                
+                # Asentamos el fraude en el log con el nodo en Hexa
+                accesos.registrar_evento_en_log(uid_hexa, titular_afectado, hex(id_nodo).upper(), "ALERTA_CLON")
+                
+                # Bloqueo físico en CSV y recarga automática de RAM
+                accesos.bloquear_uid_en_csv(uid_hexa)
+                
+                # 3. Despacho del JSON serializado hacia Node-RED / Bot de Telegram
+                topico = "sbc/notify"
+                exit_payload = {
+                    "destino": "all",
+                    "evento": "alerta",
+                    "nodo": hex(id_nodo).upper(),
+                    "data": titular_afectado
+                }
+                
+                #Pasamos el diccionario a string JSON para que MQTT lo transmita limpio
+                main_mqtt.publicar_mensaje(topico, json.dumps(exit_payload))
+                            
+            else:
+                accesos.registrar_evento_en_log(uid_hexa,resultado,hex(id_nodo).upper(),"DESCONOCIDO")
     
+    
+    elif cmd == config.CMD_UID:
+        # La ESP está en modo programación y leyó un tag (nuevo o viejo)
+        uid_hexa = payload[0:7].hex().upper() if len(payload) >= 7 else "ERROR"
+        print(f"[PARSER - PROGMODE] Capturado Tag en modo registro en nodo {hex(id_nodo).upper()}. UID: {uid_hexa}")
+        
+        # Llamamos a la función de accesos para meterla al CSV con habilitado=false y titular="Nuevo_NFC"
+        # (Si la tarjeta ya existía en el archivo, la función no hace nada, evitando duplicados)
+        accesos.agregar_uid_no_habilitada(uid_hexa)
     else:
         print(f"[PARSER ALERTA] Comando {cmd} desconocido o no implementado.")
 
@@ -79,6 +139,7 @@ def nexo_task():#hilo uqe escucha y llama a parsear
                 # TODO: Avisar a Telegram sobre la caída del nodo administrativo
             else:
                 # Si no es una alerta del driver, es data cruda de un nodo: la pasamos al parser
+
                 parser(evento)
 
         except queue.Empty:
