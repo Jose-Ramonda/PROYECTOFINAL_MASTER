@@ -1,0 +1,26 @@
+\section{Servidor}
+El servidor es el nucleo del sistema. Es en esencia una computadora con una distribución de linux como sistema operativo, la cual está conectada por un lado al bus RS-485 mediante una interfaz serial, y por otro tanto a la red local de la escuela como a internet.
+
+Para el desarrollo se utilizó una laptop con debian utilizando un adaptador USB a RS-485, pero en campo puede utilizarse una computadora portartil%TODO ver que carajo usé
+
+La arquitectura consta de cuatro procesos
+
+\begin{itemize}
+    \item Un gestor de la interfaz serrial que se encarga del polling y los comandos hacia los esclavos.
+    \item La interfaz de usuario.
+    \item El servidor HTTP.
+    \item Un broker MQTT para comunicar los procesos.
+\end{itemize}
+
+\subsection{Programa principal}
+El dominio de la interfaz serial se ocupa de realizar las encuestas periódicas, verificar la conetividad y comandar a los esclavos, así como de procesar lso datos recibidos por estos.
+
+Está programado en python y se compone de varios módulos. cada módulo incluye funciones que pueden ser llamadas desde otros archivos así como procesos que se disparan en hilos paralelos de ejecución (librería \textit{treading.py}). El programa principal \textit{main.py} crea los procesos y dispara los hilos.
+
+En principio esta arquitectura presenta similitudes con la de los terminales implementados en FreeRTOS, pero existen diferencias clave que hay mencionar, la primera es que si bien los hilos se ejecutan mediante una estructura apropiativa gestionada por un scheduler ¿que vive en el kernel del sistema operativo (ver no estoy seguro)?, no existe en este caso tal cosa como asignación de prioridades, todos los hilos en estado ready comparten time slices del mismo tamaño.
+
+Otro punto clave es el GIL de python o \enquote{Guard Inteface Lock}. Esta característica impide que un proceso de python se ejecute en mas de un hilo para prevenir la ocupación de la CPU, esto impide la simultaneidad real entre hilos a pesar de que se disponga de mas núcleos.
+
+A continuación se describen los distintos módulos que componen el sistema
+
+\subsubsection{serial.py}
