@@ -1,7 +1,10 @@
-\section{Servidor}
-El servidor es el nucleo del sistema. Es en esencia una computadora con una distribución de linux como sistema operativo, la cual está conectada por un lado al bus RS-485 mediante una interfaz serial, y por otro tanto a la red local de la escuela como a internet.
 
-Para el desarrollo se utilizó una laptop con debian utilizando un adaptador USB a RS-485, pero en campo puede utilizarse una computadora portartil%TODO ver que carajo usé
+\section{Servidor}
+El servidor constituye el núcleo del sistema. Consiste en una computadora con una distribución de Linux como sistema operativo, conectada por un lado al bus RS-485 mediante una interfaz serie y, por otro, tanto a la red de área local de la institución como a Internet.
+
+La elección de Linux como entorno de ejecución otorga portabilidad al sistema, permitiendo su despliegue sobre diversas plataformas de hardware según la disponibilidad y los requerimientos de la instalación. Durante la etapa de desarrollo y pruebas, se utilizó una computadora portátil con Ubuntu junto a un convertidor USB a RS-485 estándar. Para la puesta en producción en campo, el cambio fundamental a nivel de hardware consiste en la incorporación de un convertidor de grado industrial con aislamiento galvánico (optoacoplado y con protecciones ante transitorios), lo cual previene bucles de masa (\textit{ground loops}) y garantiza la seguridad eléctrica tanto del equipo anfitrión como del bus de comunicaciones.
+
+Cumplido este recaudo, el software puede desplegarse en cualquier servidor o PC convencional que ejecute Linux. Asimismo, una alternativa viable y compacta es el empleo de una computadora de placa reducida (\textit{Single Board Computer} o SBC), como una Raspberry Pi. Esta opción resulta especialmente conveniente cuando no se dispone de infraestructura de servidores previa o cuando se requiere ubicar la unidad de control en proximidad física al tendido del bus. Entre las ventajas añadidas del uso de una SBC destacan su bajo consumo energético y la posibilidad de prescindir de convertidores USB intermedios mediante el conexionado de un transceptor RS-485 directamente a los pines UART/GPIO del procesador.
 
 La arquitectura consta de cuatro procesos
 
@@ -9,18 +12,64 @@ La arquitectura consta de cuatro procesos
     \item Un gestor de la interfaz serrial que se encarga del polling y los comandos hacia los esclavos.
     \item La interfaz de usuario.
     \item El servidor HTTP.
-    \item Un broker MQTT para comunicar los procesos.
+    \item Un broker MQTT para comunicar los procesos entre sí.
 \end{itemize}
 
 \subsection{Programa principal}
-El dominio de la interfaz serial se ocupa de realizar las encuestas periódicas, verificar la conetividad y comandar a los esclavos, así como de procesar lso datos recibidos por estos.
+El dominio de la interfaz serial se ocupa de realizar las encuestas periódicas, verificar la conetividad y comandar a los esclavos, así como de procesar los datos recibidos por estos.
 
-Está programado en python y se compone de varios módulos. cada módulo incluye funciones que pueden ser llamadas desde otros archivos así como procesos que se disparan en hilos paralelos de ejecución (librería \textit{treading.py}). El programa principal \textit{main.py} crea los procesos y dispara los hilos.
+Está programado en python y se compone de varios módulos. Cada módulo incluye funciones que pueden ser llamadas desde otros archivos así como procesos que se disparan en hilos paralelos de ejecución (librería \textit{threading.py}). El programa principal \textit{main.py} crea los procesos y dispara los hilos.
 
-En principio esta arquitectura presenta similitudes con la de los terminales implementados en FreeRTOS, pero existen diferencias clave que hay mencionar, la primera es que si bien los hilos se ejecutan mediante una estructura apropiativa gestionada por un scheduler ¿que vive en el kernel del sistema operativo (ver no estoy seguro)?, no existe en este caso tal cosa como asignación de prioridades, todos los hilos en estado ready comparten time slices del mismo tamaño.
+En principio esta arquitectura presenta similitudes con la de los terminales implementados en FreeRTOS, pero existen diferencias clave que hay mencionar, la primera es que si bien los hilos se ejecutan mediante una estructura apropiativa gestionada por un scheduler que vive en el kernel del sistema operativo no existe en este caso tal cosa como asignación de prioridades, todos los hilos en estado ready comparten time slices del mismo tamaño.
 
-Otro punto clave es el GIL de python o \enquote{Guard Inteface Lock}. Esta característica impide que un proceso de python se ejecute en mas de un hilo para prevenir la ocupación de la CPU, esto impide la simultaneidad real entre hilos a pesar de que se disponga de mas núcleos.
+Otro punto clave es el GIL de python o \enquote{Global Interpreter Lock}, Un semáforo de exclusión mutua (\textit{mutex}) diseñado para proteger las estructuras de memoria internas y el mecanismo de conteo de referencias frente a condiciones de carrera. Por esto, solo un hilo ejecuta código Python a la vez por proceso, impidiendo el paralelismo real en tareas de cálculo intensivo. Sin embargo, para operaciones de entrada/salida (como la comunicación serie o de red), el GIL se libera durante las esperas, permitiendo una concurrencia fluida y eficiente entre módulos.
+
 
 A continuación se describen los distintos módulos que componen el sistema
 
-\subsubsection{serial.py}
+\subsubsection{Módilo serie.py}
+Este módulo es la interfaz serial del servidor e implementa la ejecución de un maestro del protocolo \enquote{Ramodbus}. El hilo principal de ejecución no requiere de una máquina de estados, sino que es secuencial. Intercambia información con los otros módulos mediante una cola de entrada y sendas colas de salida para cada nodo.
+
+Las direcciones o identificadores de los nodos activos se definen en una tupla dentro del archivo de configuración. El hilo de comunicaciones itera cíclicamente sobre estos identificadores ejecutando la siguiente secuencia por cada nodo:
+
+\begin{enumerate}
+    \item Revisa el estado del nodo, si está marcado como desconectado, se omite su consulta para no penalizar el tiempo de ciclo.
+    \item Comprueba si existen comandos pendientes en la cola asociada a dicho nodo.
+    \item Si la cola contiene elementos, extrae el comando y lo transmite; en caso contrario, envía una trama periódica de consulta (\textit{polling}).
+    \item Espera la respuesta del esclavo, luego de que responda o de un timeout pasa al siguiente nodo y repite.
+\end{enumerate}
+
+Si un nodo no responde, se incrementa un contador de fallos consecutivos que se reinicia ante cualquier recepción válida. Al superarse un umbral predefinido de reintentos fallidos, el nodo pasa al estado \textit{desconectado} y se emite una notificación al resto del sistema
+
+Cuando se recibe una respuesta válida, si se trata de una simple confirmación (\texttt{ACK}) se descarta. Si en cambio contiene datos útiles, se encapsula en un diccionario con el formato \texttt{\{
+                        \enquote{id\_nodo}: id\_nodo,
+                        \enquote{cmd}: cmd\_recibido,
+                        \enquote{payload}: payload\_recibido
+                    \}}
+
+La construcción de tramas se centraliza en una función encargada de estructurar el encabezado y computar el código de redundancia cíclica (CRC). Por su parte, la rutina de recepción bloqueante valida la dirección del destinatario, el encabezado y la coherencia del CRC, retornando la carga útil decodificada o el código de error correspondiente.
+
+En el archivo de configuración se definen tres parámetros que afectan a la velociad de la comunicación.
+\begin{itemize}
+\item \textbf{Velocidad de transmisión (\textit{Baud rate}):} Tasa de transferencia en baudios del enlace físico.
+\item \textbf{Tiempo de espera (\textit{Timeout}):} Tiempo límite que el maestro aguarda la respuesta del esclavo. Se establece con un margen superior al tiempo de respuesta nominal; por ello, la exclusión de nodos desconectados resulta indispensable para evitar retardos ociosos en el barrido.
+\item \textbf{Intervalo entre consultas (\textit{Inter-polling delay}):} Pausa deliberada entre transacciones consecutivas para no saturar el medio y otorgar tiempo de procesamiento a los terminales.
+\end{itemize}
+
+
+\subsubsection{Módulo nexo.py}
+
+Este módulo centraliza la lógica de control del servidor y la coordinación interna. Define la función pública \texttt{encolar()}, empleada tanto por rutinas internas como por otros módulos del proceso para ingresar comandos en las colas de salida sin interactuar directamente con el puerto serie.
+
+Asimismo, ejecuta un hilo dedicado a procesar los elementos de la cola de entrada. Ante eventos de desconexión de terminales, publica una alerta en el tópico MQTT correspondiente; mientras que ante la recepción de tramas de datos, invoca a la rutina de análisis sintáctico (\textit{parser}) para despachar la ejecución hacia la subrutina correspondiente según el comando recibido.
+
+\subsubsection{Módulo main\_mqtt.py}
+Este módulo encapsula el cliente MQTT del proceso. Provee una función de publicación accesible por los demás módulos y ejecuta un hilo de escucha (\textit{listener}) que, mediante su propio analizador sintáctico, procesa los mensajes entrantes según el tópico y la carga útil (\textit{payload}) recibida
+
+En general hay tres familias de tópicos anidadas en el tópico \enquote{sbc}.
+El módulo nexo publica en el subtópico \enquote{sbc/notify} para disparar las alertas de desconexión o clonación de tags, y en \enquote{sbc/status/<nodo>} donde en <nodo> figura una string del número de nodo en formato hexadecimal. En estos tópicos se informan eventos en el payload, por ejemplo \enquote{OK\_PUERTA} es el aviso de que el comando de apertura impactó sobre el terminal y el acceso fue desbloqueado y \enquote{OK\_FOTO} informa que el terminal intentó (con o sin éxito) transmitir una imagen mediante HTTP.
+
+La tercera rama corresponde a los tópicos de comandos bajo el formato \texttt{sbc/cmd/}, a los cuales el cliente permanece suscrito para recibir peticiones emitidas desde la interfaz de usuario. En este caso, la carga útil especifica el nodo destinatario; por ejemplo, si se recibe un mensaje en \texttt{sbc/cmd/abrir} con el valor \texttt{0x0A}, el módulo encola una orden de apertura dirigida al nodo 10, la cual se transmitirá físicamente durante su próxima consulta en el bus RS-485.
+
+\subsubsection{Módulo red.py}
+\subsubsection{Módulo accesos.py}
