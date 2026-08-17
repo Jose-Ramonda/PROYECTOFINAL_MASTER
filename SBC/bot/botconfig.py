@@ -7,8 +7,17 @@
 
 import os
 
+from pathlib import Path
 
-TELEGRAM_TOKEN = "8641641720:AAFUqesv-oLSnOYNmCaWURIiwv6KQYu2RpA"
+TOKEN_PATH = Path("/home/jose/token.txt")
+
+def get_telegram_token() -> str:
+    if not TOKEN_PATH.is_file():
+        raise FileNotFoundError(f"No se encontro el archivo de credenciales en {TOKEN_PATH}")
+    return TOKEN_PATH.read_text().strip()
+
+# Uso
+TOKEN = get_telegram_token()
 
 # Parámetros MQTT
 MQTT_BROKER = "localhost"
