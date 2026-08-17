@@ -32,7 +32,7 @@ def main():
     )
 
     hilo_mqtt = threading.Thread(target=arrancar_listener_global, daemon=True)
-    hilo_net = threading.Thread(target=net.net_monitor_task, args=(encolar,), daemon=True)
+    hilo_net = threading.Thread(target=red.net_monitor_task, args=(encolar,), daemon=True)
 
     #Cargo el padron a ram
     cargar_padron_a_ram()
