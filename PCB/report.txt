@@ -1,0 +1,4 @@
+Trazado a '/home/jose/Proyecto/PCB/PCB-B_Cu.gbr'.
+Trazado a '/home/jose/Proyecto/PCB/PCB-Edge_Cuts.gbr'.
+Archivo de trabajo Gerber '/home/jose/Proyecto/PCB/PCB-job.gbrjob' creado.
+Info: Listo.

@@ -14,6 +14,8 @@ from modulos.nexo import encolar
 from modulos.serie import comunicacion_task
 from modulos.main_mqtt import arrancar_listener_global
 from modulos.accesos import cargar_padron_a_ram
+from modulos import red
+
 def main():
     print("==================================================")
     print("=                     Iniciando                  =")
@@ -30,6 +32,7 @@ def main():
     )
 
     hilo_mqtt = threading.Thread(target=arrancar_listener_global, daemon=True)
+    hilo_net = threading.Thread(target=net.net_monitor_task, args=(encolar,), daemon=True)
 
     #Cargo el padron a ram
     cargar_padron_a_ram()
@@ -40,14 +43,19 @@ def main():
     hilo_nexo.start()
     hilo_serial.start()
     hilo_mqtt.start()
+    hilo_net.start()
     print("[MAIN] Hilos corriendo. Sistema operativo en escucha.")
 
-    time.sleep(5)
-    #encolar(0x0A,config.CMD_DOOR,b"")
-    # Bucle infinito del hilo principal para poder cerrarlo por teclado
 
-    #Recargamos el padron a Ram periodicamente
-    contador = 0
+
+
+
+
+    #enviamos credenciales apara arrancar
+    s, p, i = red.obtener_datos_red_completos()
+    red.despachar_url_servidor(i,1880)
+    red.despachar_credenciales_chunks(s,p)
+
     try:
         while True:
             time.sleep(1)  # Bloqueo de 1 segundo

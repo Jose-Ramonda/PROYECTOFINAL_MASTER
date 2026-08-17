@@ -11,7 +11,7 @@ SERIAL_TIMEOUT = 0.1           # 100ms de timeout nativo para pyserial
 
 # Tiempos del Protocolo (en segundos)
 POLLING_TIMEOUT = 0.2        # Timeout de espera ante no-respuesta de un esclavo
-POLLING_TIME = 0.05       # Tiempo entre ciclos de polling
+POLLING_TIME =  1# 0.05       # Tiempo entre ciclos de polling
 
 # Límites
 MAX_REINTENTOS = 12
@@ -43,3 +43,7 @@ CMD_URL = 103
 #Parametros MQTT
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
+
+
+#diccionario donde voy guardando las ip 
+ips_nodos = {}

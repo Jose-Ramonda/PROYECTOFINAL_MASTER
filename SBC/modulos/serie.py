@@ -137,6 +137,12 @@ def comunicacion_task(cola_salida, cola_entrada):
                     estados_nodos[id_nodo]["n_retry"] = 0
                     estados_nodos[id_nodo]["status"] = "OFFLINE"
                     print(f"[SERIAL WARN] Nodo {hex(id_nodo)} pasó a OFFLINE")
+                    alerta_offline = {
+                        "evento": "NODO_CAIDO",
+                        "id_nodo": id_nodo
+                    }
+                    cola_entrada.put(alerta_offline)
+
                 
                 # Descartamos basura del buffer serie tras un timeout/error
                 ser.reset_input_buffer()

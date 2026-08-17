@@ -9,6 +9,12 @@ import paho.mqtt.client as mqtt
 from telegram import Bot  # Importación directa para v20+
 import botconfig  # Contiene MQTT_BROKER, MQTT_PORT, TOKEN y DICCIONARIO_NODOS
 
+DICCIONARIO_NODOS = {
+    "0xa": "Acceso Frente",
+    "0x14": "Acceso Patio",
+    "0x1e": "Acceso Bicicletero"
+}
+
 # Inicializamos el cliente de bot aislado para el hilo de MQTT de notificaciones
 _bot_inyector = Bot(token=botconfig.TELEGRAM_TOKEN)
 
@@ -39,6 +45,7 @@ def publicar_comando(accion, payload):
 async def enviar_directo_sincrono(chat_id, evento, nombre_nodo, data):
     """Abre el canal de red de Telegram, despacha Texto o Foto según el evento y cierra"""
     async with _bot_inyector:
+        nombre_coloquial = DICCIONARIO_NODOS.get(nombre_nodo, f"Nodo {nombre_nodo}")
         try:
             # Caso 1: Confirmación de apertura de puerta (Texto plano)
             if evento == "puerta_ok":
@@ -48,13 +55,16 @@ async def enviar_directo_sincrono(chat_id, evento, nombre_nodo, data):
             # Caso 2: clonacion de credenciales
             elif evento == "alerta":
                 # data contiene el nombre del titular afectado (ej: "Jose Ramonda")
-                texto = (
-                    f"¡ALERTA CRITICA DE SEGURIDAD!\n\n"
-                    f"Se ha detectado un intento de acceso con una tarjeta CLONADA.\n"
-                    f"Titular: {data}\n"
-                    f"Acceso: {nombre_nodo}\n\n"
-                    f"La tarjeta implicada ha sido BLOQUEADA en el sistema automáticamente."
-                )
+                if data == "DESCONECTADO":
+                    texto = f"ALERTA - {nombre_coloquial} desconectado"
+                else:
+                    texto = (
+                        f"¡ALERTA CRITICA DE SEGURIDAD!\n\n"
+                        f"Se ha detectado un intento de acceso con una tarjeta CLONADA.\n"
+                        f"Titular: {data}\n"
+                        f"Acceso: {nombre_nodo}\n\n"
+                        f"La tarjeta implicada ha sido BLOQUEADA en el sistema automáticamente."
+                    )
                 await _bot_inyector.send_message(chat_id=chat_id, text=texto)
             # Caso 3: Foto de control solicitada por un usuario (Imagen + Epígrafe)
             elif evento == "foto_solicitada_ok":

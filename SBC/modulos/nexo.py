@@ -19,6 +19,7 @@ for id_nodo in config.NODOS_ID:
     cola_salida[id_nodo] = queue.Queue()
 
 
+
 #Tiempo de ultimo comando nfc
 last =0
 
@@ -56,6 +57,8 @@ def parser(evento):
         ip_detectada = ".".join(str(b) for b in payload)
         print(f"[PARSER - WIFI] El nodo {hex(id_nodo)} reporta IP: {ip_detectada}")
         main_mqtt.publicar_mensaje(topico_nodo, ip_detectada)
+        
+        config.ips_nodos[id_nodo] = ip_detectada
 
     elif cmd == config.CMD_TAKE_PH:
         print(f"[PARSER - CAMARA] El nodo {hex(id_nodo)} reporta fotografía tomada")
@@ -136,7 +139,16 @@ def nexo_task():#hilo uqe escucha y llama a parsear
             # El hilo serial te puede mandar "DATOS_NODO" o alertas como "NODO_CAIDO"
             if "evento" in evento and evento["evento"] == "NODO_CAIDO":
                 print(f"[LOGICA ALERTA] El nodo {hex(evento['id_nodo'])} se ha ido OFFLINE.")
-                # TODO: Avisar a Telegram sobre la caída del nodo administrativo
+                topico = "sbc/notify"
+                exit_payload = {
+                    "destino": "all",
+                    "evento": "alerta", # Mantenemos "alerta" para usar la misma ruta lógica en Node-RED
+                    "nodo": hex(evento["id_nodo"]),
+                    "data": "DESCONECTADO" # Texto que indica qué pasó con el nodo
+                }
+                
+                # Pasamos el diccionario a string JSON para que MQTT lo transmita limpio
+                main_mqtt.publicar_mensaje(topico, json.dumps(exit_payload))
             else:
                 # Si no es una alerta del driver, es data cruda de un nodo: la pasamos al parser
 

@@ -515,7 +515,7 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "./",
+      "plot": "/home/jose/Proyecto/PCB",
       "pos_files": "",
       "specctra_dsn": "",
       "step": "",
