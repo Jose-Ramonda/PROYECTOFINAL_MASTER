@@ -9,11 +9,18 @@ Cumplido este recaudo, el software puede desplegarse en cualquier servidor o PC 
 La arquitectura consta de cuatro procesos
 
 \begin{itemize}
-    \item Un gestor de la interfaz serrial que se encarga del polling y los comandos hacia los esclavos.
+    \item Un gestor de la interfaz serial que se encarga del polling y los comandos hacia los esclavos.
     \item La interfaz de usuario.
     \item El servidor HTTP.
     \item Un broker MQTT para comunicar los procesos entre sí.
 \end{itemize}
+
+La interfaz serial no solo gestiona la comunicación con los terminales, sino que también se ocupa del monitoreo de la conetividad de estos por ambas vías y resuelve internamente todo lo relacionado con los accesos mediante tags NFC.
+
+El servidor HTTP se implementa sobre una instancia de node-red y también incorpora algunas funcionalidades auxiliares.
+
+La interfaz de usuario está programada en python y utiliza la API de la aplicación de mensajería \enquote{Telegram}.
+
 
 \subsection{Programa principal}
 El dominio de la interfaz serial se ocupa de realizar las encuestas periódicas, verificar la conetividad y comandar a los esclavos, así como de procesar los datos recibidos por estos.
@@ -70,30 +77,31 @@ En general hay tres familias de tópicos anidadas en el tópico \enquote{sbc}.
 El módulo nexo publica en el subtópico \enquote{sbc/notify} para disparar las alertas de desconexión o clonación de tags, y en \enquote{sbc/status/<nodo>} donde en <nodo> figura una string del número de nodo en formato hexadecimal. En estos tópicos se informan eventos en el payload, por ejemplo \enquote{OK\_PUERTA} es el aviso de que el comando de apertura impactó sobre el terminal y el acceso fue desbloqueado y \enquote{OK\_FOTO} informa que el terminal intentó (con o sin éxito) transmitir una imagen mediante HTTP.
 
 La tercera rama corresponde a los tópicos de comandos bajo el formato \texttt{sbc/cmd/}, a los cuales el cliente permanece suscrito para recibir peticiones emitidas desde la interfaz de usuario. En este caso, la carga útil especifica el nodo destinatario; por ejemplo, si se recibe un mensaje en \texttt{sbc/cmd/abrir} con el valor \texttt{0x0A}, el módulo encola una orden de apertura dirigida al nodo 10, la cual se transmitirá físicamente durante su próxima consulta en el bus RS-485.
+El payload de algunos mensajes de este tópico inclyen además del número de nodo la id del chat del usuario que los solicitó, el cual es utilizado en el proceso de node-red.
 
 \subsubsection{Módulo red.py}
 El múdulo de red realiza las funciones de conexión y mantenimiento de las conexiones a la red local de los terminales.
 Incorpora el módulo subprocess, el cual permite inyectar comandos a la terminal del sistema operativo. Implementa funciones que mediante comandos de terminal obtienen la dirección ip del servidor, el nombre de la red wifi y la contraseña de acceso, para esta última es necesario tener privilegios de superusuario al ejecutar el script, esto no representa un problema en producción ya que al correr como servicios todos los procesos se ejecutan desde el usuario raiz.
 
-Los datos obtenidos sirven como argumentos de otras dos funciones que transmiten las configuraciones de red a los nodos, una toma la ip y arma la trama de 6 bytes de ip + puerto para el servidor HTTP (por defecto se utiliza el puerto 1880) y la otra toma el nombre de la red y la contraseña, los segmentan en chunks de no mas de 7 bytes y arman las tramas de formato subcomando + chunk actual + chunck totales + data , para indicar al terminal que modifique sus credenciales de acceso a la red.
+Los datos obtenidos sirven como argumentos de otras dos funciones que transmiten las configuraciones de red a los nodos, una toma la ip y arma la trama de 6 bytes de ip + puerto para el servidor HTTP (por defecto se utiliza el puerto 1880) y la otra toma el nombre de la red y la contraseña, los segmentan en chunks de no más de 7 bytes y arman las tramas de formato subcomando + chunk actual + chunck totales + data, para indicar al terminal que modifique sus credenciales de acceso a la red.
 Ambas funciones barren con la tupla de nodos y para cada uno encolan los mensajes que hagan falta para configurar la conexión.
 Estas funciones se ejecutan al inicio del programa desde el main para que el sistema inicie con los nodos configurados.
 
-Tambien se incluyó un hilo de monitoreo, el cual periódicamente recorre un diccionario que asocia cada nodo con su ip reportada y verifica la conexión mediante un ping. Ante sucesivas fallas en el ping, se encola un comando de reconexión al terminal.
+También se incluyó un hilo de monitoreo, el cual periódicamente recorre un diccionario que asocia cada nodo con su ip reportada y verifica la conexión mediante un ping. Ante sucesivas fallas en el ping, se encola un comando de reconexión al terminal.
 
-El diccionario es global y esta definido en el archivo de configuración. Lo rellena el parser como respuesta a los comandos de WiFi provenientes del nodo, los cuales reportan la ip de este.
+El diccionario es global y está definido en el archivo de configuración. Lo rellena el parser como respuesta a los comandos de WiFi provenientes del nodo, los cuales reportan la ip de este.
 
 Esto se definió así dado que al ocupar una red ya existente, el sistema puede adaptarse a las asignaciones de ip dinámicas por DHCP del router.
 
 \subsubsection{Módulo accesos.py}
 Este módulo implementa toda la lógica de accesos mediante tags NFC. Gestiona la actualización del \enquote{padrón} de accesos, la validación de solicitudes y el registro histórico local.
 
-Incorpora las las librerías os para operar con archivos, csv para leer y escribir archivos de este formato y datetime para poder incorporar fecha y hora en los registros.
+Incorpora las librerías os para operar con archivos, csv para leer y escribir archivos de este formato y datetime para poder incorporar fecha y hora en los registros.
 
 El padrón es un archivo csv que incluye los campos UID, contador, titular y habilitación.
 la UID y el contador son los datos recibidos desde el terminal que deben validarse. El titular es el dueño del tag asociado y la habilitación es un campo booleano que permite desactivar tags ya sea manualmente  mediante la modificación del archivo o de forma automatica cuando se detecta una clonación.
 
-Como la funcionalidad de acceso debe ser dinámica, no se puede consultar al archivo en cada solicitud, la función \texttt{cargar_padron_a_ram()} rellena un diccionario con las UID, contadores y titulares de los tags habilitados. Esta función se llama al iniciar el proceso o mediante la llegada de un comando por MQTT desde la interfaz de usuario.
+Como la funcionalidad de acceso debe ser dinámica, no se puede consultar al archivo en cada solicitud, la función \texttt{cargar\_padron\_a\_ram()} rellena un diccionario con las UID, contadores y titulares de los tags habilitados. Esta función se llama al iniciar el proceso o mediante la llegada de un comando por MQTT desde la interfaz de usuario.
 
 La trama de que envían los terminales consta de 7 bytes para el UID y 3 bytes para el contador.
 El procesamiento de las tramas lo realiza el parser mediante funciones del módulo de acceso, priemro, con los datos recibidos llama a la función validar, la cual revisa primero que la UID coincida con alguna de las cargadas en ram y luego que el contador sea válido mediante los siguientes criterios:
@@ -101,12 +109,80 @@ El procesamiento de las tramas lo realiza el parser mediante funciones del módu
 \begin{itemize}
     \item El contador recibido no puede ser menor al guardado, ya que esto implicaría una clonación
     \item El contador recibido no puede ser mucho mayor al guardado, ya que esto implicaría que fue leído por fuera del sistema, se deja un margen para posibles fallas, por ejemplo una lectura válida con el servidor caído.
-    \item Un caso excepcional es si el contador guardado tiene el valor -1, en este caso se cualquier valor como válido ya que se le asigna -1 a los tags nuevos a incorporar, o por si se quiere volver a incorporar un tag que fue desabilitado anteriormente, ya que pudo seguir siendo leído por los terminales y aumentando el contador de forma indefinida.
+    \item Un caso excepcional es si el contador guardado tiene el valor -1, en este caso se toma cualquier valor como válidoya que se le asigna -1 a los tags nuevos a incorporar, o por si se quiere volver a incorporar un tag que fue desabilitado anteriormente, ya que pudo seguir siendo leído por los terminales y aumentando el contador de forma indefinida.
 \end{itemize}
 
 En el caso de que la solicitud sea válida, la función actualiza el contador tanto en ram como en el archivo y retorna éxito
-Si la función retorna éxito, el parser encola un comando de apertura y posteriormente llama a la función registrar_evento_en_log la cual registra en un csv la entrada válida.
-
+Si la función retorna éxito, el parser encola un comando de apertura y posteriormente llama a la función registrar\_evento\_en\_log la cual registra en un csv la entrada válida.
 En el caso de que la UID no se encuentre en el padrón, la función de validación devuelve \enquote{\texttt{DESCONOCIDO}} y el parser registra el evento.
 
-Si el fallo en la validación está en el contador,la función de validación dehabilita el tag tanto en ram como en el padrón y devuelve \enquote{\texttt{CLONACIÓN}}. El parser además de registrar el evento, dispara una alarma por MQTT para que la interfaz notifique los usuarios.
+Si el fallo en la validación está en el contador, la función de validación dehabilita el tag tanto en ram como en el padrón y devuelve \enquote{\texttt{CLONACIÓN}}. El parser además de registrar el evento, dispara una alarma por MQTT para que la interfaz notifique los usuarios.
+
+\subsection{Instacia de node-red}
+
+Node-red es una herramienta de automatización de flujos de datos. Al ejecutarse levanta un servidor accesible desde el navegador que permite editar los llamados \enquote{flujos} mediante una interfaz gráfica en la cual uno arrastra \enquote{nodos} y los une de forma similar a un diagrama de bloques. Exiten bloques para manejos de distintos protocolos asi como bloques de función programables en javascript.
+
+La principal ventaja de su uso es la simpleza y rapidez de implementación, además de que para flujos de datos simples permite mantener un orden visual muy claro. Node-red deja de ser conveniente cuando la aplicación sube en complejidad o cuando la lógica comienza a considerar demasiados escenarios, por lo que en esta aplicación se mantuvo para aplicar los flujos de datos más simples.
+
+El principal uso que se le da en el sistema es el de servidor HTTP. Mediante un bloque \enquote{POST} recibe las imágenes transmitidas por los terminales y las guarda en un directorio específico mediante un nodo de archivo.
+
+Este flujo también incorpora un cliente MQTT que suscribe al tópico de comandos, el cual guarda en memoria el nodo y la id del chat del usuario que lo disparó.
+También suscribe al tópico de status, para retransmitir la información al tópico notify.
+Esto lo hace para el caso de los comandos de apertura, para enviar la confirmación solo al usuario que la solicitó. En el caso de las fotografías, revisa si fue solicitada por un usuario y lo utiliza como destino, si la fotografía se corresponde a alguien solicitando el acceso desde fuera, indica que se transmita a todos los usuarios.
+El payload de la foto es un json que indica el evento (si la foto fue solicitada por un usario o \enquote{espontánea}, es decir por solicitud de acceso de un visitante), el destinatario y la ruta absoluta de la fotografía.
+
+Otro flujo simple que se implementó es la carga histórica del registro de accesos. Mediante un nodo de inyección programado para dispararse diariamente a cierta hora, se envía un email con el archivo csv de registros que contiene los correspondientes a ese día.
+El flujo utiliza un nodo de archivo para saber donde \enquote{buscar} el registro, luego un nodo de función para formatear el mensaje y finalmente un nodo e-mail, el cual está configurado con la dirección de destinatario así como con una clave de aplicación, en este caso de gogle para trabajar con gmail.
+
+El nodo \enquote{complete} se asocia a otros nodos y se dispara cada vez que el objetivo realiza su función, al apuntarlo al nodo de e-mail, sabe cuando el correo se envió exitosamente y comannda un nodo de archivo para que elimine el registro viejo, así cada archivo solo representa al día pasado. En el caso de error, por ejemplo que a la hora de enviar el correo el servidor pierda la conexión a internet, no se borra el archivo y sigue acumulando registros hasta que se envíe.
+
+Hay un tercer flujo desactivado que permite inyectar tramas por el bus RS-485. Utiiza nodos de inyección manual conectados a un nodo de función que calcula y añade el CRC y envía la trama a un nodo serial. También incluye un nodo serial de entrada conectado a un nodo de debug para observar las respuestas. Este flujo se utilizó en el desarrollo para porbar el protocolo y se mantuvo para pruebas. Si bien se tuvo que desactivar para no generar conflictos con el uso del puerto serie del servidor, que ahora utiliza el programa principal, se mantiene como una herramienta de debug y pruebas de actualizaciones en el futuro.
+
+
+\subsection{Interfaz de Usuario}
+
+La interacción principal con el sistema de control de acceso se centraliza a través de un \textit{bot} en la aplicación de mensajería instantánea Telegram. Esta plataforma fue seleccionada frente a alternativas populares como WhatsApp debido a que ofrece una API gratuita, abierta, ampliamente documentada y accesible. En contraste, la API de WhatsApp requiere un registro empresarial, es de pago y presenta un entorno más cerrado. Adicionalmente, esta decisión responde al requerimiento explícito del cliente de mantener las funcionalidades de control de acceso separadas de sus comunicaciones cotidianas, evitando que los comandos y notificaciones de seguridad se pierdan entre otras conversaciones.
+
+El \textit{bot} permite automatizar respuestas en formato de chat e implementar comandos e interfaces gráficas basadas en menús. La aplicación fue desarrollada en Python y se ejecuta como un proceso completamente independiente. Esta decisión arquitectónica permite desacoplar la interfaz del resto de las tareas del sistema, aislando posibles puntos de fallo. 
+
+Asimismo, la biblioteca \texttt{python-telegram-bot} requiere el uso nativo del módulo \texttt{asyncio} para el manejo de tareas asíncronas. Dado que este módulo implementa un esquema de concurrencia colaborativa, su convivencia con el módulo \texttt{threading} tradicional dentro del mismo proceso resulta compleja y propensa a colisiones, lo que refuerza la necesidad técnica de aislar el \textit{bot} en su propio espacio de ejecución.
+
+
+\subsubsection{Arquitectura y Máquina de Estados}
+El núcleo de la interfaz se basa en una Máquina de Estados Finitos (MEF) implementada mediante un \texttt{ConversationHandler}. Este diseño previene comportamientos erráticos al restringir las acciones del usuario según su estado actual en el sistema. Los estados definidos son:
+\begin{itemize}
+    \item \textbf{ESPERANDO\_USER y ESPERANDO\_CLAVE:} Flujo inicial de autenticación.
+    \item \textbf{EN\_MENU\_USUARIO:} Estado de reposo donde el sistema aguarda interacciones a través de los teclados en línea (botones).
+    \item \textbf{ESPERANDO\_CLAVE\_ADMIN:} Estado transitorio para la elevación de privilegios.
+\end{itemize}
+Cualquier entrada de texto no reconocida mientras el sistema se encuentra en estado de menú es capturada e ignorada de forma segura para no romper el flujo de la conversación.
+
+\subsubsection{Módulo de Autenticación y Roles}
+La seguridad de la interfaz se gestiona de forma local a través del archivo \texttt{credenciales.json}. El sistema clasifica a los individuos en tres categorías: \textit{Invitados} (sin acceso), \textit{Usuarios Estándar} (pueden operar puertas y cámaras) y \textit{Administradores} (pueden auditar el sistema y gestionar el hardware). 
+
+Al ingresar exitosamente, el sistema vincula de forma permanente el \texttt{chat\_id} numérico de Telegram con el perfil del usuario. Esto es fundamental para el posterior enrutamiento de notificaciones asíncronas y alertas de seguridad específicas a cada individuo.
+
+\subsubsection{Navegación y Menús Interactivos}
+Para minimizar los errores de tipeo, la operación se realiza íntegramente mediante teclados en línea (\texttt{InlineKeyboardMarkup}). Los menús son dinámicos; por ejemplo, la selección de hardware lee directamente las direcciones físicas reales del bus de los nodos (como \texttt{0x0A} para el Acceso Frente) desde la configuración (\texttt{botconfig.py}) y las embebe en la carga útil (callback) de cada botón. 
+
+El Administrador cuenta con un panel avanzado que le permite:
+\begin{itemize}
+    \item Listar el estado y privilegios de todos los usuarios registrados.
+    \item Activar o detener el \textit{Modo Programación} directamente en el hardware de los nodos remotos.
+    \item Descargar y actualizar la base de datos física de accesos.
+\end{itemize}
+
+\subsubsection{Integración MQTT y Notificaciones Asíncronas}
+El módulo \texttt{MQTT.py} gestiona dos vías de comunicación simultáneas para comunicar este proceso con el resto del sistema:
+\begin{enumerate}
+    \item \textbf{Emisión de comandos (\texttt{sbc/cmd/}):} Ejecuciones síncronas gatilladas por los botones del bot (aperturas, toma de fotografías, inicio de modo programación).
+    \item \textbf{Escucha de notificaciones (\texttt{sbc/notify}):} Un hilo secundario que se mantiene suscrito al bróker para atajar alertas provenientes de Node-RED o del hardware.
+\end{enumerate}
+
+Este hilo secundario cuenta con un bucle de eventos propio (\texttt{asyncio}) que le permite despachar contenido multimedia a los usuarios sin bloquear la ejecución principal de la interfaz. Esto incluye capturas fotográficas de control, alertas tempranas por pulsación de timbres físicos y notificaciones críticas de seguridad (por ejemplo, el bloqueo automático ante el escaneo de una tarjeta clonada).
+
+\subsubsection{Gestión Dinámica del Padrón de Accesos}
+El sistema resuelve la actualización de credenciales NFC de forma intuitiva. El administrador puede solicitar la descarga del archivo \texttt{accesos\_autorizados.csv} directamente desde el chat. Una vez editado externamente, la actualización en el servidor SBC se logra adjuntando el nuevo documento a la conversación. El bot ataja el archivo entrante, valida su nomenclatura, lo descarga reemplazando el padrón anterior en el disco y publica un comando MQTT (\texttt{actualiza}) para que el hardware refresque sus listas locales de permisos.
+
+
+
