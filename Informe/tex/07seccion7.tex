@@ -1,1 +1,24 @@
-\section{Seguridad}
+\section{Seguridad} 
+
+Un sistema de control de acceso es un tipo de sistema de segurad y como tal debe estar protegido.
+Su objetivo es restringir el ingreso a personas autorizadas y aumentar el nivel de protección de las instalaciones mediante mecanismos de identificación y validación de usuarios.
+
+No obstante, es importante señalar que ningún sistema de seguridad puede considerarse completamente invulnerable. En la práctica, las medidas de seguridad no buscan eliminar por completo la posibilidad de un ataque o una intrusión, sino reducir su probabilidad de éxito y aumentar la dificultad, el tiempo y los recursos necesarios para llevarlo a cabo.
+
+El nivel de seguridad implementado debe ser coherente con el contexto de uso, la probabilidad de ocurrencia de amenazas y las limitaciones técnicas y físicas existentes. En este caso, el sistema está destinado al control de acceso de una institución educativa, cuyas necesidades de seguridad difieren de las de entornos críticos como entidades bancarias o instalaciones de alta seguridad.
+
+Asimismo, la eficacia del sistema se encuentra condicionada por características físicas de la infraestructura. Las puertas sobre las que actúa el sistema incorporan un destrabador eléctrico, pero no cuentan con mecanismos de refuerzo estructural adicionales. Por lo tanto, aunque el sistema puede impedir el acceso normal a personas no autorizadas, no puede evitar métodos de ingreso forzado que excedan las capacidades del mecanismo de cierre. En consecuencia, la solución propuesta debe entenderse como una mejora significativa en el control y la gestión de accesos, dentro de las limitaciones físicas y operativas del entorno donde será implementada.
+
+\subsection{Posibles ataques y vulnerabilidades}
+
+La principal vulnerabilidad del sistema es la física y abarca principalmente dos posibles ataques.Primero el ingreso forzado, en este caso el sistema en si no representa una barrera física si no administrativa. No es lo mismo a nivel legal que una persona no autorizada simplemente abra la puerta y acceda a que ingrese mediante el uso de la violencia. La existencia de la medida de seguridad define la falta que constituye vulnerarla.
+El otro caso es el de la afectación física del sistema, por ejemplo la desconexión del servidor, el sabotaje del cableado del bus serial, etc. Estos eventos, si bien no permiten el acceso no autorizado como tal, anulan total o parcialmente el funcionamiento del sistema.
+
+Por fuera del sabotaje físico, si un atacante deseara poder acceder a voluntad pasando desapercibido, hay dos caminos posibles:
+
+\begin{itemize}
+    \item Clonar un tag NFC válido.
+    \item Tomar control del sistema en alguna de sus instancias inyectando comandos de apertura.
+\end{itemize}
+
+
